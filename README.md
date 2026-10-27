@@ -24,6 +24,35 @@ from-pixels-to-language/
     ├── training/             # Training loops
     └── evaluation/           # Metrics and benchmarking
 ```
+## Installation
+
+### 1. Create a virtual environment (Optional but recommended)
+
+```bash
+python -m venv .venv
+```
+
+### 2. Activate the virtual environment
+
+**Windows (PowerShell):**
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+**Windows (Command Prompt):**
+
+```cmd
+.venv\Scripts\activate.bat
+```
+
+### 3. Install dependencies
+
+Install all required Python libraries listed in `requirements.txt`:
+
+```bash
+python -m pip install -r requirements.txt
+```
 
 ## Dataset
 

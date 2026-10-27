@@ -1,0 +1,20 @@
+#Dataset loading
+datasets
+
+#Data analysis
+pandas
+numpy
+
+#Visualization
+matplotlib
+seaborn
+
+#Deep learning
+torch
+torchvision
+
+#Machine learning utilities
+scikit-learn
+
+#Jupyter notebooks
+ipykernel
