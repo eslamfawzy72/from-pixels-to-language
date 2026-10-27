@@ -10,6 +10,21 @@ This project aims to build an end-to-end multimodal deep learning system that pe
 
 The same visual encoder serves as the backbone for all three tasks.
 
+## Project Structure
+
+```text
+from-pixels-to-language/
+├── README.md
+├── requirements.txt          # List of required Python libraries and dependencies used in the project
+├── configs/                  # Hyperparameters and run settings
+├── notebooks/                # Experiments only (not part of the final code)
+└── src/
+    ├── data/                 # Datasets, transforms, augmentation
+    ├── models/               # Encoder, colorization model, caption decoder
+    ├── training/             # Training loops
+    └── evaluation/           # Metrics and benchmarking
+```
+
 ## Dataset
 
 The project uses the **CUB-200-2011 dataset with captions**, which contains images of 200 bird species, with ten human-written descriptions for each image.

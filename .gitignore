@@ -1,0 +1,52 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# IDE settings
+.vscode/
+.idea/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Model checkpoints and trained weights
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.h5
+*.keras
+
+# Experiment outputs and logs
+mlruns/
+wandb/
+lightning_logs/
+tensorboard/
+logs/
+
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+
+# Build and distribution artifacts
+build/
+dist/
+*.egg-info/
