@@ -18,3 +18,5 @@ scikit-learn
 
 #Jupyter notebooks
 ipykernel
+
+opencv-python
