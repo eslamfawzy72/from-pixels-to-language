@@ -15,7 +15,7 @@ from sklearn.model_selection import train_test_split
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SEED = 42
 VAL_FRACTION = 0.15
-SPLIT_PATH = PROJECT_ROOT / "data" / "splits" / f"train_val_seed{SEED}.json"
+SPLIT_PATH = PROJECT_ROOT / "src" / "data" / f"train_val_seed{SEED}.json"
 
 
 def dhash(img, size=8):
