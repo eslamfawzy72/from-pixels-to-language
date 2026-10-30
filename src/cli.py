@@ -5,6 +5,8 @@ Examples:
     python -m src.cli train --task classification --config configs/classification.yaml
     python -m src.cli train --task classification --model googlenet --epochs 80 \
         --set train.model_kwargs.batch_norm=true --set train.model_kwargs.aux_logits=false
+    python -m src.cli tune --task classification --method grid      # search space: configs/tuning.yaml
+    python -m src.cli compare-tuning outputs/runs/tune_resnet18_grid outputs/runs/tune_resnet18_random
     python -m src.cli evaluate --task classification --checkpoint outputs/runs/<run>/best.pt --split test
     python -m src.cli predict --task classification --checkpoint outputs/runs/<run>/best.pt --image bird.jpg
 
@@ -25,6 +27,7 @@ import yaml
 
 TASKS = ("classification",)
 DEFAULT_CONFIG = Path("configs/classification.yaml")
+DEFAULT_TUNING = Path("configs/tuning.yaml")
 
 
 def load_settings(path: Path) -> dict[str, Any]:
@@ -55,9 +58,10 @@ def apply_override(settings: dict[str, Any], assignment: str) -> None:
     target[keys[-1]] = yaml.safe_load(raw_value)
 
 
-def resolve_train_settings(args: argparse.Namespace) -> dict[str, Any]:
-    """Load the config file and apply shortcut flags and ``--set`` overrides (later wins)."""
+def resolve_train_settings(args: argparse.Namespace, preset: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    """Load the config file and apply ``preset`` train values, shortcut flags and ``--set`` overrides (later wins)."""
     settings = copy.deepcopy(load_settings(args.config))
+    settings["train"].update(preset or {})
     shortcuts = {
         "train.model_name": args.model,
         "train.epochs": args.epochs,
@@ -67,7 +71,7 @@ def resolve_train_settings(args: argparse.Namespace) -> dict[str, Any]:
         "train.scheduler": args.scheduler,
         "train.seed": args.seed,
         "output.dir": args.output_dir,
-        "output.run_name": args.run_name,
+        "output.run_name": getattr(args, "run_name", None),
         "tracking.dir": args.tracking_dir,
         "tracking.tracking_uri": args.tracking_uri,
         "tracking.experiment": args.experiment,
@@ -114,6 +118,65 @@ def cmd_train(args: argparse.Namespace) -> None:
         run(None)
 
 
+def yaml_scalar(value: Any) -> str:
+    """Write ``value`` so ``--set`` parses it back unchanged (YAML reads ``1e-05`` as a string, ``1.0e-05`` as a float)."""
+    text = repr(value)
+    if isinstance(value, float) and "e" in text and "." not in text:
+        text = text.replace("e", ".0e")
+    return text
+
+
+def build_trials(method: str, tuning: dict[str, Any], num_trials: Optional[int] = None,
+                 search_seed: Optional[int] = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Return the trial values and the search space for ``method`` from the tuning settings."""
+    from src.tuning import grid_trials, random_trials
+
+    if method == "grid":
+        space = tuning.get("grid") or {}
+        return grid_trials(space), space
+    options = tuning.get("random") or {}
+    space = options.get("space") or {}
+    trials = random_trials(space, num_trials or options.get("num_trials", 6),
+                           seed=options.get("seed", 0) if search_seed is None else search_seed)
+    return trials, space
+
+
+def cmd_tune(args: argparse.Namespace) -> None:
+    from src.tasks.classification import tune_classification
+
+    tuning = load_settings(args.space)
+    settings = resolve_train_settings(args, preset=tuning.get("trial"))
+    trials, space = build_trials(args.method, tuning, args.num_trials, args.search_seed)
+    base = settings["train"]
+    study_name = args.study_name or f"tune_{base['model_name']}_{args.method}"
+    study_dir = Path(settings["output"].get("dir") or "outputs/runs") / study_name
+    tracking = settings["tracking"]
+    if tracking.get("enabled", True):
+        tracking = {**tracking, "experiment": args.experiment or tuning.get("experiment", "tuning")}
+    else:
+        tracking = None
+    data = settings["data"]
+
+    print(f"{args.method} search: {len(trials)} trials of {base['epochs']} epochs -> {study_dir}")
+    summary = tune_classification(base, trials, study_dir, args.method, space=space,
+                                  num_workers=data.get("num_workers", 2), image_size=data.get("image_size", 224),
+                                  tracking=tracking)
+    overrides = " ".join(f"--set train.{key}={yaml_scalar(value)}" for key, value in summary["best"]["params"].items())
+    print(f"Full training run with the best setting:\n  python -m src.cli train --task {args.task} "
+          f"--model {base['model_name']} --run-name {base['model_name']}_tuned {overrides}")
+
+
+def cmd_compare_tuning(args: argparse.Namespace) -> None:
+    from src.tuning import comparison_rows, load_study, markdown_table
+
+    table = markdown_table(comparison_rows([load_study(path) for path in args.studies]))
+    print(table)
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(table + "\n", encoding="utf-8")
+        print(f"Saved {args.output}")
+
+
 def cmd_evaluate(args: argparse.Namespace) -> None:
     from src.tasks.classification import evaluate_classification
 
@@ -131,30 +194,51 @@ def cmd_predict(args: argparse.Namespace) -> None:
             print(f"  {rank}. {name:<35} {probability:6.2%}")
 
 
+def add_settings_arguments(parser: argparse.ArgumentParser) -> None:
+    """Flags shared by ``train`` and ``tune`` (see :func:`resolve_train_settings`)."""
+    parser.add_argument("--task", choices=TASKS, required=True)
+    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help=f"YAML settings (default: {DEFAULT_CONFIG})")
+    parser.add_argument("--model", help="architecture name, e.g. resnet18")
+    parser.add_argument("--epochs", type=int)
+    parser.add_argument("--lr", type=float, help="initial learning rate")
+    parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--optimizer", choices=("sgd", "adam", "adamw"))
+    parser.add_argument("--scheduler", choices=("none", "cosine", "step", "plateau"))
+    parser.add_argument("--seed", type=int)
+    parser.add_argument("--output-dir", help="parent folder for run directories")
+    parser.add_argument("--experiment", help="MLflow experiment name")
+    parser.add_argument("--tracking-dir", help="folder for the MLflow database and artifacts "
+                        "(default: outputs/mlflow; on Colab use a Google Drive folder)")
+    parser.add_argument("--tracking-uri", help="MLflow tracking URI (e.g. a remote server); overrides --tracking-dir")
+    parser.add_argument("--no-tracking", action="store_true", help="disable MLflow tracking")
+    parser.add_argument("--set", action="append", metavar="SECTION.KEY=VALUE",
+                        help="override any config value, e.g. --set train.model_kwargs.batch_norm=true")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m src.cli", description=__doc__.split("\n\n")[0])
     commands = parser.add_subparsers(dest="command", required=True)
 
     train = commands.add_parser("train", help="train a model")
-    train.add_argument("--task", choices=TASKS, required=True)
-    train.add_argument("--config", type=Path, default=DEFAULT_CONFIG, help=f"YAML settings (default: {DEFAULT_CONFIG})")
-    train.add_argument("--model", help="architecture name, e.g. resnet18")
-    train.add_argument("--epochs", type=int)
-    train.add_argument("--lr", type=float, help="initial learning rate")
-    train.add_argument("--batch-size", type=int)
-    train.add_argument("--optimizer", choices=("sgd", "adam", "adamw"))
-    train.add_argument("--scheduler", choices=("none", "cosine", "step", "plateau"))
-    train.add_argument("--seed", type=int)
-    train.add_argument("--output-dir", help="parent folder for run directories")
+    add_settings_arguments(train)
     train.add_argument("--run-name", help="run folder / MLflow run name (default: <model>_<timestamp>)")
-    train.add_argument("--experiment", help="MLflow experiment name")
-    train.add_argument("--tracking-dir", help="folder for the MLflow database and artifacts "
-                       "(default: outputs/mlflow; on Colab use a Google Drive folder)")
-    train.add_argument("--tracking-uri", help="MLflow tracking URI (e.g. a remote server); overrides --tracking-dir")
-    train.add_argument("--no-tracking", action="store_true", help="disable MLflow tracking")
-    train.add_argument("--set", action="append", metavar="SECTION.KEY=VALUE",
-                       help="override any config value, e.g. --set train.model_kwargs.batch_norm=true")
     train.set_defaults(func=cmd_train)
+
+    tune = commands.add_parser("tune", help="grid or random hyperparameter search (short trials, validation split)")
+    add_settings_arguments(tune)
+    tune.add_argument("--method", choices=("grid", "random"), required=True)
+    tune.add_argument("--space", type=Path, default=DEFAULT_TUNING,
+                      help=f"YAML search space and trial settings (default: {DEFAULT_TUNING})")
+    tune.add_argument("--num-trials", type=int, help="random search: number of trials (overrides the YAML)")
+    tune.add_argument("--search-seed", type=int, help="random search: sampling seed (overrides the YAML)")
+    tune.add_argument("--study-name", help="study folder / MLflow parent run name (default: tune_<model>_<method>); "
+                      "re-running the same study skips finished trials")
+    tune.set_defaults(func=cmd_tune)
+
+    compare = commands.add_parser("compare-tuning", help="compare finished tuning studies in a table")
+    compare.add_argument("studies", type=Path, nargs="+", help="study folders containing results.json")
+    compare.add_argument("--output", type=Path, help="also save the Markdown table to this file")
+    compare.set_defaults(func=cmd_compare_tuning)
 
     evaluate = commands.add_parser("evaluate", help="evaluate a checkpoint on the val or test split")
     evaluate.add_argument("--task", choices=TASKS, required=True)
