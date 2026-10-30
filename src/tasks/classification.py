@@ -1,4 +1,4 @@
-"""Classification task: train, evaluate and predict.
+"""Classification task: train, tune, evaluate and predict.
 
 This module wires together the data pipeline (``src.data``), the models
 (``src.models``), the training loop (``src.training``) and optional MLflow
@@ -69,6 +69,61 @@ def train_classification(
     stop = " (stopped early)" if result["stopped_early"] else ""
     print(f"Best {config.monitor}: {result['best_metric']:.4f} at epoch {result['best_epoch']}{stop}")
     return result
+
+
+def tune_classification(
+    base: dict[str, Any],
+    trials: Sequence[dict[str, Any]],
+    study_dir: PathLike,
+    method: str,
+    space: Optional[dict[str, Any]] = None,
+    num_workers: int = 2,
+    image_size: int = 224,
+    tracking: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+    """Run a grid or random search: one :func:`train_classification` run per trial.
+
+    ``base`` is the ``train`` section shared by all trials and ``trials`` the
+    values each trial changes. With ``tracking`` (the ``tracking`` settings
+    section) the study becomes an MLflow parent run and every trial a nested
+    child run. Returns the study summary of :func:`src.tuning.run_study`.
+    """
+    from src.tuning import run_study
+
+    study_dir = Path(study_dir)
+    if tracking is None:
+        def train_untracked(config: TrainConfig, run_dir: Path, run_name: str) -> dict[str, Any]:
+            return train_classification(config, run_dir, num_workers=num_workers, image_size=image_size)
+
+        return run_study(base, trials, study_dir, method, train_untracked, space=space)
+
+    experiment = tracking.get("experiment", "tuning")
+    location = {"tracking_dir": tracking.get("dir", "outputs/mlflow"), "tracking_uri": tracking.get("tracking_uri")}
+    tags = {"task": "classification", "model": base["model_name"], "method": method, "study": study_dir.name}
+    with MLflowTracker(experiment, run_name=study_dir.name, tags={**tags, "role": "study"}, **location) as parent:
+        parent.log_params({"method": method, "num_trials": len(trials), "image_size": image_size, **base})
+        parent.set_tags({"search_space": json.dumps(space), "study_dir": study_dir.resolve()})
+
+        def train_tracked(config: TrainConfig, run_dir: Path, run_name: str) -> dict[str, Any]:
+            with MLflowTracker(experiment, run_name=run_name, nested=True,
+                               log_checkpoints=tracking.get("log_checkpoints", False),
+                               tags={**tags, "role": "trial", "trial": run_dir.name}, **location) as tracker:
+                return train_classification(config, run_dir, num_workers=num_workers, image_size=image_size,
+                                            tracker=tracker)
+
+        def log_trial(record: dict[str, Any]) -> None:
+            step = int(record["trial"].rsplit("_", 1)[1])
+            parent.log_metric("trial_val_accuracy", record["val_accuracy"], step=step)
+            parent.log_metric("trial_minutes", record["seconds"] / 60, step=step)
+
+        summary = run_study(base, trials, study_dir, method, train_tracked, space=space, on_trial_end=log_trial)
+        best = summary["best"]
+        parent.log_metrics({"best_value": best["best_metric"], "best_val_accuracy": best["val_accuracy"],
+                            "total_minutes": summary["total_seconds"] / 60})
+        parent.set_tags({"best_trial": best["trial"], "best_params": json.dumps(best["params"])})
+        for name in ("results.json", "results.csv"):
+            parent.log_artifact(study_dir / name)
+    return summary
 
 
 def load_model_from_checkpoint(checkpoint_path: PathLike, device: torch.device) -> tuple[nn.Module, dict[str, Any]]:
