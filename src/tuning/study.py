@@ -32,6 +32,8 @@ PathLike = Union[str, Path]
 TrainFn = Callable[[TrainConfig, Path, str], dict[str, Any]]
 METHODS = ("grid", "random")
 RESULT_FILE = "trial_result.json"
+# Recorded for every trial (taken from its TrainConfig), whether or not the search changes them.
+RECORDED_HYPERPARAMETERS = ("learning_rate", "weight_decay", "label_smoothing")
 
 
 def trial_name(index: int) -> str:
@@ -49,15 +51,16 @@ def build_trial_configs(base: dict[str, Any], trials: Sequence[dict[str, Any]]) 
     return configs
 
 
-def trial_record(index: int, params: dict[str, Any], result: dict[str, Any], seconds: float,
-                 monitor: str) -> dict[str, Any]:
-    """Summarize one finished trial (metrics are taken at its best epoch)."""
+def trial_record(index: int, params: dict[str, Any], config: TrainConfig, result: dict[str, Any],
+                 seconds: float) -> dict[str, Any]:
+    """Summarize one finished trial (metrics are taken at its best epoch on the validation split)."""
     history = result["history"]
     best = next(m for m in history if m["epoch"] == result["best_epoch"])
     return {
         "trial": trial_name(index),
         "params": params,
-        "monitor": monitor,
+        "hyperparameters": {key: getattr(config, key) for key in RECORDED_HYPERPARAMETERS},
+        "monitor": config.monitor,
         "best_metric": result["best_metric"],
         "best_epoch": result["best_epoch"],
         "epochs_run": len(history),
@@ -80,14 +83,15 @@ def best_trial(records: Sequence[dict[str, Any]], monitor: str) -> Optional[dict
 
 def write_results(study_dir: Path, summary: dict[str, Any]) -> None:
     (study_dir / "results.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-    keys = sorted({key for record in summary["trials"] for key in record["params"]})
-    columns = ["trial", *keys, "val_accuracy", "best_epoch", "epochs_run", "train_accuracy", "val_loss",
-               "final_val_accuracy", "seconds"]
+    other_keys = sorted({key for record in summary["trials"] for key in record["params"]}
+                        - set(RECORDED_HYPERPARAMETERS))
+    columns = ["trial", *RECORDED_HYPERPARAMETERS, *other_keys, "val_accuracy", "best_epoch", "epochs_run",
+               "train_accuracy", "val_loss", "final_val_accuracy", "seconds"]
     with (study_dir / "results.csv").open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore")
         writer.writeheader()
         for record in summary["trials"]:
-            writer.writerow({**record, **record["params"]})
+            writer.writerow({**record, **record.get("hyperparameters", {}), **record["params"]})
 
 
 def run_study(
@@ -132,7 +136,7 @@ def run_study(
             print(f"[{name}] {index + 1}/{len(trials)} {params}", flush=True)
             start = time.perf_counter()
             result = train_fn(config, run_dir, f"{study_dir.name}_{name}")
-            record = trial_record(index, params, result, time.perf_counter() - start, monitor)
+            record = trial_record(index, params, config, result, time.perf_counter() - start)
             result_path.write_text(json.dumps(record, indent=2), encoding="utf-8")
 
         summary["trials"].append(record)

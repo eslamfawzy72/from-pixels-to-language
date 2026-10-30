@@ -48,10 +48,26 @@ class TestSearchSpace(unittest.TestCase):
         self.assertEqual(len({tuple(t.items()) for t in trials}), 6)
         self.assertEqual(trials[0], {"learning_rate": 0.02, "weight_decay": 5e-4})
 
+    def test_fractional_grid_rotates_the_other_keys(self) -> None:
+        grid = {"learning_rate": [0.02, 0.05, 0.1], "weight_decay": [5e-4, 2e-3], "label_smoothing": [0.0, 0.1, 0.2]}
+        trials = grid_trials(grid, crossed=["learning_rate", "weight_decay"])
+        self.assertEqual(len(trials), 6)
+        self.assertTrue(all(set(t) == set(grid) for t in trials))
+        # learning_rate x weight_decay fully crossed, each label_smoothing value used twice
+        self.assertEqual({(t["learning_rate"], t["weight_decay"]) for t in trials},
+                         {(lr, wd) for lr in grid["learning_rate"] for wd in grid["weight_decay"]})
+        self.assertEqual([t["label_smoothing"] for t in trials], [0.0, 0.1, 0.1, 0.2, 0.2, 0.0])
+        for lr in grid["learning_rate"]:  # each learning rate meets two different label smoothings
+            self.assertEqual(len({t["label_smoothing"] for t in trials if t["learning_rate"] == lr}), 2)
+        self.assertEqual(len(grid_trials(grid)), 18)  # no crossed keys -> full Cartesian product
+
     def test_bad_grid(self) -> None:
         for grid in ({}, {"learning_rate": []}, {"learning_rate": 0.1}):
             with self.subTest(grid=grid), self.assertRaises(ValueError):
                 grid_trials(grid)
+        for crossed in ([], ["momentum"]):
+            with self.subTest(crossed=crossed), self.assertRaises(ValueError):
+                grid_trials({"learning_rate": [0.1]}, crossed=crossed)
 
     def test_random_is_reproducible_and_within_bounds(self) -> None:
         space = {"learning_rate": {"type": "loguniform", "low": 0.01, "high": 0.15},
@@ -105,6 +121,8 @@ class TestStudy(unittest.TestCase):
         self.assertEqual(summary["best"]["params"], {"learning_rate": 0.05})
         self.assertEqual(summary["best"]["val_accuracy"], 1.0)
         self.assertEqual(summary["best"]["epochs_run"], 3)
+        self.assertEqual(summary["best"]["hyperparameters"],
+                         {"learning_rate": 0.05, "weight_decay": 5e-4, "label_smoothing": 0.0})
         self.assertAlmostEqual(summary["total_seconds"], sum(r["seconds"] for r in summary["trials"]))
 
         saved = load_study(study_dir)
@@ -112,7 +130,8 @@ class TestStudy(unittest.TestCase):
         self.assertEqual(saved["space"], {"learning_rate": [0.02, 0.05, 0.1]})
         csv_lines = (study_dir / "results.csv").read_text(encoding="utf-8").splitlines()
         self.assertEqual(len(csv_lines), 4)
-        self.assertTrue(csv_lines[0].startswith("trial,learning_rate,val_accuracy"))
+        self.assertTrue(csv_lines[0].startswith("trial,learning_rate,weight_decay,label_smoothing,val_accuracy"))
+        self.assertTrue(csv_lines[2].startswith("trial_01,0.05,0.0005,0.0,"))
 
     def test_rerun_reuses_finished_trials(self) -> None:
         study_dir = make_temp_dir(self) / "study"
@@ -167,10 +186,15 @@ class TestStudy(unittest.TestCase):
 class TestTuneCli(unittest.TestCase):
     def test_repo_tuning_config(self) -> None:
         tuning = cli.load_settings(REPO_TUNING)
-        grid, _ = cli.build_trials("grid", tuning)
+        grid, grid_space = cli.build_trials("grid", tuning)
         random_a, space = cli.build_trials("random", tuning)
         random_b, _ = cli.build_trials("random", tuning)
         self.assertEqual(len(grid), 6)
+        self.assertEqual(grid_space["crossed"], ["learning_rate", "weight_decay"])
+        tuned = {"learning_rate", "weight_decay", "label_smoothing"}
+        self.assertTrue(all(set(t) == tuned for t in grid + random_a))
+        self.assertEqual(len({tuple(t.values()) for t in grid}), 6)
+        self.assertEqual(tuning["trial"]["monitor"], "val_accuracy")
         self.assertEqual(len(random_a), 6)
         self.assertEqual(random_a, random_b)
         self.assertEqual(set(space), {"learning_rate", "weight_decay", "label_smoothing"})

@@ -208,8 +208,10 @@ To browse those runs on your PC, download the Drive `mlflow` folder and run `mlf
 
 | | Grid search | Random search |
 |---|---|---|
-| Values | `learning_rate` {0.02, 0.05, 0.1} × `weight_decay` {5e-4, 2e-3}; `label_smoothing` stays 0.1 | `learning_rate` log-uniform [0.01, 0.15], `weight_decay` log-uniform [1e-4, 5e-3], `label_smoothing` ∈ {0, 0.1, 0.2} |
-| Trials | 6 (all combinations) | 6 (sampled with `random.seed: 0`) |
+| Values | `learning_rate` {0.02, 0.05, 0.1}, `weight_decay` {5e-4, 2e-3}, `label_smoothing` {0, 0.1, 0.2} | `learning_rate` log-uniform [0.01, 0.15], `weight_decay` log-uniform [1e-4, 5e-3], `label_smoothing` ∈ {0, 0.1, 0.2} |
+| Trials | 6: fractional grid; `learning_rate` × `weight_decay` fully crossed, `label_smoothing` rotated so each value is used twice (`grid_crossed` in the YAML; the full product would be 18) | 6 (sampled with `random.seed: 0`) |
+
+Every trial records its `learning_rate`, `weight_decay` and `label_smoothing` in `results.json` (`hyperparameters`) and `results.csv`.
 
 Every trial uses the same model (ResNet-18), data, training seed and length (12 epochs, 1 warm-up epoch, cosine schedule, no early stopping); only the tuned values differ.
 

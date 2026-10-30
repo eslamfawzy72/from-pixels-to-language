@@ -6,6 +6,9 @@ Grid search takes a list of values per key::
 
     {"learning_rate": [0.02, 0.05, 0.1], "weight_decay": [5e-4, 2e-3]}   # 3 x 2 = 6 trials
 
+or, as a fractional grid, crosses some keys and rotates the others (see
+:func:`grid_trials`).
+
 Random search takes one distribution per key::
 
     {"learning_rate": {"type": "loguniform", "low": 0.01, "high": 0.15},
@@ -20,21 +23,41 @@ from __future__ import annotations
 import itertools
 import math
 import random
-from typing import Any
+from typing import Any, Optional, Sequence
 
 DISTRIBUTIONS = ("loguniform", "uniform", "int", "choice")
 SIGNIFICANT_DIGITS = 3  # sampled floats are rounded so run names and tables stay readable
 
 
-def grid_trials(grid: dict[str, list[Any]]) -> list[dict[str, Any]]:
-    """Return every combination of the values in ``grid`` (keys keep their order)."""
+def grid_trials(grid: dict[str, list[Any]], crossed: Optional[Sequence[str]] = None) -> list[dict[str, Any]]:
+    """Return the grid trials (every trial sets every key of ``grid``; keys keep their order).
+
+    Without ``crossed`` this is the full Cartesian product. With ``crossed``
+    (a fractional grid), only those keys are fully crossed; every other key
+    is rotated through its values across the crossed combinations: the value
+    at index ``(sum of the crossed value indices) mod len(values)``. Example::
+
+        grid_trials({"lr": [1, 2, 3], "wd": [4, 5], "ls": [6, 7, 8]}, crossed=["lr", "wd"])
+        # 3 x 2 = 6 trials; ls = 6, 7, 7, 8, 8, 6 (each value twice)
+    """
     if not grid:
         raise ValueError("grid search space is empty")
     for key, values in grid.items():
         if not isinstance(values, (list, tuple)) or not values:
             raise ValueError(f"grid values for {key!r} must be a non-empty list, got {values!r}")
     keys = list(grid)
-    return [dict(zip(keys, combination)) for combination in itertools.product(*(grid[k] for k in keys))]
+    crossed_keys = keys if crossed is None else list(crossed)
+    unknown = [key for key in crossed_keys if key not in grid]
+    if unknown or not crossed_keys:
+        raise ValueError(f"crossed keys must be a non-empty subset of {keys}, got {list(crossed_keys)}")
+
+    trials = []
+    for indices in itertools.product(*(range(len(grid[k])) for k in crossed_keys)):
+        chosen = dict(zip(crossed_keys, indices))
+        offset = sum(indices)
+        trials.append({key: grid[key][chosen[key]] if key in chosen else grid[key][offset % len(grid[key])]
+                       for key in keys})
+    return trials
 
 
 def _round(value: float) -> float:

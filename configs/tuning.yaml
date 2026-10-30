@@ -9,10 +9,19 @@ trial:                         # short trials: same seed, same data, only the tu
   epochs: 12
   warmup_epochs: 1
   early_stopping_patience: null
+  monitor: val_accuracy        # trials are ranked by validation accuracy only
 
-grid:                          # Cartesian product: 3 x 2 = 6 trials (label_smoothing stays at the base 0.1)
+grid:
   learning_rate: [0.02, 0.05, 0.1]
   weight_decay: [0.0005, 0.002]
+  label_smoothing: [0.0, 0.1, 0.2]
+# Fractional grid: only these keys are fully crossed (3 x 2 = 6 trials, not 3 x 2 x 3 = 18);
+# label_smoothing is rotated across them so each of its values is used in 2 trials:
+#   lr 0.02: wd 5e-4 -> ls 0.0, wd 2e-3 -> ls 0.1
+#   lr 0.05: wd 5e-4 -> ls 0.1, wd 2e-3 -> ls 0.2
+#   lr 0.1 : wd 5e-4 -> ls 0.2, wd 2e-3 -> ls 0.0
+# Remove this line for the full Cartesian product.
+grid_crossed: [learning_rate, weight_decay]
 
 random:
   num_trials: 6                # same budget as the grid

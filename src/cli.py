@@ -132,8 +132,8 @@ def build_trials(method: str, tuning: dict[str, Any], num_trials: Optional[int] 
     from src.tuning import grid_trials, random_trials
 
     if method == "grid":
-        space = tuning.get("grid") or {}
-        return grid_trials(space), space
+        grid, crossed = tuning.get("grid") or {}, tuning.get("grid_crossed")
+        return grid_trials(grid, crossed), {"values": grid, "crossed": crossed or list(grid)}
     options = tuning.get("random") or {}
     space = options.get("space") or {}
     trials = random_trials(space, num_trials or options.get("num_trials", 6),
