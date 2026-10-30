@@ -152,10 +152,13 @@ def run_study(
     return summary
 
 
-def load_study(study_dir: PathLike) -> dict[str, Any]:
-    path = Path(study_dir) / "results.json"
+def load_study(study: PathLike) -> dict[str, Any]:
+    """Load a study summary from its folder (``results.json`` inside) or from a summary JSON file."""
+    path = Path(study)
+    if path.is_dir():
+        path = path / "results.json"
     if not path.is_file():
-        raise FileNotFoundError(f"No results.json in {study_dir}; run the study first")
+        raise FileNotFoundError(f"No study results at {path}; run the study first")
     return json.loads(path.read_text(encoding="utf-8"))
 
 

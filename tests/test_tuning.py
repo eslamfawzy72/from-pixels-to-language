@@ -127,6 +127,9 @@ class TestStudy(unittest.TestCase):
 
         saved = load_study(study_dir)
         self.assertEqual(saved["best"]["trial"], "trial_01")
+        self.assertEqual(load_study(study_dir / "results.json"), saved)  # a summary file works too
+        with self.assertRaises(FileNotFoundError):
+            load_study(study_dir / "missing.json")
         self.assertEqual(saved["space"], {"learning_rate": [0.02, 0.05, 0.1]})
         csv_lines = (study_dir / "results.csv").read_text(encoding="utf-8").splitlines()
         self.assertEqual(len(csv_lines), 4)

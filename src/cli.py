@@ -236,7 +236,8 @@ def build_parser() -> argparse.ArgumentParser:
     tune.set_defaults(func=cmd_tune)
 
     compare = commands.add_parser("compare-tuning", help="compare finished tuning studies in a table")
-    compare.add_argument("studies", type=Path, nargs="+", help="study folders containing results.json")
+    compare.add_argument("studies", type=Path, nargs="+",
+                         help="study folders containing results.json, or study summary JSON files")
     compare.add_argument("--output", type=Path, help="also save the Markdown table to this file")
     compare.set_defaults(func=cmd_compare_tuning)
 
