@@ -149,10 +149,14 @@ src/training/
 src/evaluation/
 ├── metrics.py       # accuracy
 └── benchmark.py     # parameter counts, latency, peak memory (CUDA)
+src/tuning/
+├── search_space.py  # grid (Cartesian product) and random (log-uniform, uniform, int, choice) trials
+└── study.py         # run_study (resumable), results.json/csv, comparison table
 src/tasks/
-└── classification.py  # train / evaluate / predict: wires data + model + training + tracking
+└── classification.py  # train / tune / evaluate / predict: wires data + model + training + tracking
 src/cli.py           # command line interface
 configs/classification.yaml  # default classification settings
+configs/tuning.yaml          # search spaces and trial settings for `tune`
 ```
 
 ### Command line interface
@@ -197,6 +201,41 @@ python -m src.cli train --task classification \
 ```
 
 To browse those runs on your PC, download the Drive `mlflow` folder and run `mlflow ui --backend-store-uri sqlite:///<path>/mlflow/mlflow.db`. Artifact links point to the Drive paths; the metrics and parameters are all inside `mlflow.db`.
+
+### Hyperparameter tuning (grid and random search)
+
+`python -m src.cli tune` trains one short run ("trial") per hyperparameter setting and compares them on the **validation** split (`train.monitor`, default `val_accuracy`); the test split is never used for tuning. The search space and trial settings are in [configs/tuning.yaml](configs/tuning.yaml); the base settings still come from `configs/classification.yaml`.
+
+| | Grid search | Random search |
+|---|---|---|
+| Values | `learning_rate` {0.02, 0.05, 0.1} × `weight_decay` {5e-4, 2e-3}; `label_smoothing` stays 0.1 | `learning_rate` log-uniform [0.01, 0.15], `weight_decay` log-uniform [1e-4, 5e-3], `label_smoothing` ∈ {0, 0.1, 0.2} |
+| Trials | 6 (all combinations) | 6 (sampled with `random.seed: 0`) |
+
+Every trial uses the same model (ResNet-18), data, training seed and length (12 epochs, 1 warm-up epoch, cosine schedule, no early stopping); only the tuned values differ.
+
+```bash
+python -m src.cli tune --task classification --method grid
+python -m src.cli tune --task classification --method random
+python -m src.cli compare-tuning outputs/runs/tune_resnet18_grid outputs/runs/tune_resnet18_random \
+    --output outputs/tuning_comparison.md
+```
+
+Each study is saved to `<output.dir>/tune_<model>_<method>/`: one folder per trial (`trial_00/` …, with `best.pt`, `history.json`, `trial_result.json`) plus `results.json` and `results.csv`. **Re-running the same command resumes the study**: finished trials are skipped and an interrupted trial restarts from scratch, which helps when a Colab session disconnects. Use `--study-name` for a new study with a different search space.
+
+At the end, `tune` prints the `train` command for a full-length run with the best setting. `compare-tuning` prints a table with each study's best validation accuracy, best parameters, number of trials and total/per-trial time.
+
+In MLflow (experiment `tuning`), each study is a parent run (search space, best trial and parameters, `best_val_accuracy`, `total_minutes`, per-trial `trial_val_accuracy`) and each trial is a nested child run with the usual per-epoch curves.
+
+Useful flags: `--num-trials` and `--search-seed` (random search), `--space` (another YAML file), `--epochs` (trial length), plus every `train` flag (`--model`, `--output-dir`, `--tracking-dir`, `--set`, ...).
+
+On Colab (one T4 epoch of ResNet-18 takes about 63 s, so each study takes about 6 × 12 × 63 s ≈ 75 min):
+
+```bash
+python -m src.cli tune --task classification --method grid \
+    --output-dir /content/drive/MyDrive/from-pixels-to-language/runs \
+    --tracking-dir /content/drive/MyDrive/from-pixels-to-language/mlflow
+# same with --method random, then compare-tuning on the two Drive study folders
+```
 
 ### Creating a model
 
