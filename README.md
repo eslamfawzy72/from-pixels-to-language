@@ -85,6 +85,35 @@ The dataset includes the following fields:
 - id: The record identifier.
 For image colorization, grayscale images will be generated from the original color images, which will serve as the target outputs.
 
+## Preprocessed Data for Classification
+
+All preprocessing lives in `src/data/` and runs on the fly while training, so no preprocessed files need to be shared. The dataset downloads automatically from Hugging Face on first use.
+
+| Module | Contents |
+|---|---|
+| `src/data/transforms.py` | RGB conversion, letterbox resize to 224x224, training augmentation, ImageNet normalization |
+| `src/data/splits.py` | Duplicate removal and the stratified train / validation split |
+| `src/data/dataset.py` | PyTorch `Dataset` and `get_dataloaders()` |
+| `data/splits/train_val_seed42.json` | The saved split (5,091 train / 899 validation); committed so everyone uses the same images |
+
+Load the data in a training script:
+
+```python
+from src.data.dataset import get_dataloaders, get_class_names
+
+if __name__ == "__main__":  # required on Windows when num_workers > 0
+    train_loader, val_loader, test_loader = get_dataloaders(batch_size=32, num_workers=2)
+    class_names = get_class_names()
+
+    for images, labels in train_loader:  # images: (32, 3, 224, 224), labels: (32,) in 0-199
+        ...
+```
+
+- Training batches are augmented and shuffled; validation and test batches are not.
+- Use the validation loader for tuning and model selection; use the test loader only for the final evaluation.
+- Check the pipeline: `python -m src.data.dataset`
+- Regenerate the split (only if the rules change): `python -m src.data.splits`
+
 ## CNN Architectures (Classification Encoder)
 
 Nine architectures from the course lecture *CNN Architectures* are implemented **from scratch** in PyTorch (random initialization, no pretrained weights, no torchvision models):
@@ -204,7 +233,7 @@ result = fit(model, train_loader, val_loader, config, run_dir="outputs/runs/resn
 
 ### Known limitations
 
-- No real-data training or accuracy results yet; integration with the preprocessing pipeline is pending.
+- No real-data training or accuracy results yet. `get_dataloaders()` from `src/data/dataset.py` already yields batches in the format `fit()` expects.
 - No learning-rate scheduler, early stopping or mixed precision yet.
 - Peak memory is only measured on CUDA.
 - Training VGG and GoogLeNet without BatchNorm from scratch on ~6k images may be unstable; `batch_norm=True` is available as a documented deviation.
