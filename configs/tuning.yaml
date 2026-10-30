@@ -1,0 +1,25 @@
+# Search settings for: python -m src.cli tune --task classification --method grid|random
+# The base training settings come from --config (configs/classification.yaml); the
+# `trial` section below is applied on top of them for every trial, then the tuned values.
+# Shortcut flags and --set overrides on the command line win over both.
+# Keys under grid / random.space are TrainConfig fields. Trials are compared on
+# train.monitor (val_accuracy) of the validation split; the test split is never used.
+
+trial:                         # short trials: same seed, same data, only the tuned values differ
+  epochs: 12
+  warmup_epochs: 1
+  early_stopping_patience: null
+
+grid:                          # Cartesian product: 3 x 2 = 6 trials (label_smoothing stays at the base 0.1)
+  learning_rate: [0.02, 0.05, 0.1]
+  weight_decay: [0.0005, 0.002]
+
+random:
+  num_trials: 6                # same budget as the grid
+  seed: 0                      # sampling seed (the training seed is train.seed)
+  space:
+    learning_rate: {type: loguniform, low: 0.01, high: 0.15}
+    weight_decay: {type: loguniform, low: 0.0001, high: 0.005}
+    label_smoothing: {type: choice, values: [0.0, 0.1, 0.2]}
+
+experiment: tuning             # MLflow experiment; each study is a parent run with one child run per trial
