@@ -16,6 +16,10 @@ torchvision
 #Machine learning utilities
 scikit-learn
 
+#Experiment tracking and configuration
+mlflow
+pyyaml
+
 #Jupyter notebooks
 ipykernel
 

@@ -18,11 +18,12 @@ def save_checkpoint(
     epoch: Optional[int] = None,
     metrics: Optional[dict[str, float]] = None,
     config: Optional[dict[str, Any]] = None,
+    extra: Optional[dict[str, Any]] = None,
 ) -> Path:
     """Save model (and optionally optimizer) state plus run metadata.
 
-    ``config`` should contain plain Python values (e.g. ``TrainConfig.to_dict()``)
-    so the checkpoint can be loaded with ``weights_only=True``.
+    ``config`` and ``extra`` (e.g. class names, input size) should contain
+    plain Python values so the checkpoint can be loaded with ``weights_only=True``.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -33,6 +34,7 @@ def save_checkpoint(
             "epoch": epoch,
             "metrics": metrics or {},
             "config": config or {},
+            "extra": extra or {},
         },
         path,
     )

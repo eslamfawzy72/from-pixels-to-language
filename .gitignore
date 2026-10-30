@@ -35,6 +35,8 @@ desktop.ini
 
 # Experiment outputs and logs
 mlruns/
+mlflow.db
+outputs/runs/
 wandb/
 lightning_logs/
 tensorboard/

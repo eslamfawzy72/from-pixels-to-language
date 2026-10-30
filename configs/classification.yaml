@@ -1,0 +1,36 @@
+# Settings for: python -m src.cli train --task classification --config configs/classification.yaml
+# Any value can be overridden on the command line, e.g.
+#   --model vgg16 --epochs 60 --lr 0.01 --set train.model_kwargs.batch_norm=true
+
+train:                       # fields of src.training.TrainConfig
+  model_name: resnet18       # alexnet, vgg16, vgg19, googlenet, resnet18/34/50/101/152
+  num_classes: 200           # CUB-200-2011
+  model_kwargs: {}           # e.g. {batch_norm: true} for VGG/GoogLeNet, {aux_logits: false} for GoogLeNet
+  epochs: 60
+  batch_size: 32
+  optimizer: sgd             # sgd | adam | adamw
+  learning_rate: 0.05
+  momentum: 0.9
+  weight_decay: 0.0005
+  scheduler: cosine          # none | cosine | step | plateau
+  warmup_epochs: 3
+  min_lr: 0.0
+  label_smoothing: 0.1
+  early_stopping_patience: 15
+  monitor: val_accuracy      # val_accuracy | val_loss
+  seed: 42
+  device: auto               # auto | cpu | cuda
+
+data:
+  num_workers: 2
+  image_size: 224
+
+output:
+  dir: outputs/runs          # each run is saved to <dir>/<run_name>/
+  run_name: null             # null -> <model>_<timestamp>
+
+tracking:
+  enabled: true
+  experiment: classification
+  tracking_uri: null         # null -> ./mlruns; on Colab use a Drive path, e.g. file:/content/drive/MyDrive/from-pixels-to-language/mlruns
+  log_checkpoints: false     # upload .pt files to MLflow (large); the checkpoint path is always recorded

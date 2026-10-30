@@ -140,15 +140,61 @@ src/models/
 ├── factory.py       # create_model(name, num_classes, **kwargs)
 └── utils.py         # count_parameters
 src/training/
-├── config.py        # TrainConfig dataclass
+├── config.py        # TrainConfig dataclass (optimizer, LR schedule, early stopping, ...)
 ├── losses.py        # Loss handling for models with auxiliary outputs
-├── train.py         # set_seed, build_optimizer, train_one_epoch, fit
+├── train.py         # set_seed, build_optimizer, build_scheduler, train_one_epoch, fit
 ├── validate.py      # validate (no gradient updates)
-└── checkpoint.py    # save_checkpoint / load_checkpoint
+├── checkpoint.py    # save_checkpoint / load_checkpoint
+└── tracking.py      # MLflowTracker (params, per-epoch metrics, artifacts)
 src/evaluation/
 ├── metrics.py       # accuracy
 └── benchmark.py     # parameter counts, latency, peak memory (CUDA)
+src/tasks/
+└── classification.py  # train / evaluate / predict: wires data + model + training + tracking
+src/cli.py           # command line interface
+configs/classification.yaml  # default classification settings
 ```
+
+### Command line interface
+
+All training, evaluation and inference runs go through `src/cli.py`. Settings come from [configs/classification.yaml](configs/classification.yaml); shortcut flags and `--set section.key=value` override any value.
+
+```bash
+# Train (defaults from the YAML file: resnet18, 60 epochs, SGD + cosine schedule, MLflow on)
+python -m src.cli train --task classification --config configs/classification.yaml
+
+# Change the model / hyperparameters from the command line
+python -m src.cli train --task classification --model googlenet --epochs 80 --lr 0.05 \
+    --set train.model_kwargs.batch_norm=true --set train.model_kwargs.aux_logits=false
+
+# Evaluate the best checkpoint on the held-out test split (writes test_metrics.json next to it)
+python -m src.cli evaluate --task classification --checkpoint outputs/runs/<run_name>/best.pt --split test
+
+# Predict the species of one or more images (top-5)
+python -m src.cli predict --task classification --checkpoint outputs/runs/<run_name>/best.pt --image bird.jpg
+```
+
+Useful flags for `train`: `--model`, `--epochs`, `--lr`, `--batch-size`, `--optimizer`, `--scheduler`, `--seed`, `--run-name`, `--output-dir`, `--experiment`, `--tracking-uri`, `--no-tracking`, `--set`. Run `python -m src.cli train --help` for the full list.
+
+Each run is saved to `outputs/runs/<run_name>/` (`best.pt`, `last.pt`, `history.json`). Checkpoints also store the class names and input size, so `predict` works without downloading the dataset.
+
+### Experiment tracking (MLflow)
+
+With `tracking.enabled: true` (the default), every training run is logged to MLflow: all hyperparameters, parameter counts, per-epoch `train_loss`, `train_accuracy`, `val_loss`, `val_accuracy` and `lr` (shown as curves), the best epoch, `history.json`, and the checkpoint path. Set `tracking.log_checkpoints: true` to upload the `.pt` files too (VGG checkpoints exceed 1 GB).
+
+```bash
+mlflow ui --backend-store-uri ./mlruns        # then open http://127.0.0.1:5000
+```
+
+On Colab, store runs on Google Drive so they survive the session:
+
+```bash
+python -m src.cli train --task classification \
+    --output-dir /content/drive/MyDrive/from-pixels-to-language/runs \
+    --tracking-uri file:/content/drive/MyDrive/from-pixels-to-language/mlruns
+```
+
+Afterwards, browse the runs locally with `mlflow ui --backend-store-uri <path to the downloaded mlruns folder>`.
 
 ### Creating a model
 
@@ -212,7 +258,7 @@ python -m src.evaluation.benchmark --models resnet18 vgg16 --batch-size 8 --devi
 
 Results are written to `results/benchmark_<device>.json` (with the hardware/software environment) and `.csv`. The benchmark measures parameter counts and eval-mode forward latency (with warm-up and CUDA synchronization); peak memory is reported on CUDA only. `--num-classes` defaults to 1000 so parameter counts are comparable with the lecture's ImageNet figures. These are cost measurements, **not** accuracy results.
 
-### Training with a data loader
+### Training from Python (without the CLI)
 
 The training code does not load or preprocess data. It accepts any iterable (normally a `torch.utils.data.DataLoader`) yielding `(images, labels)` with `images` as a float tensor `[N, C, H, W]` and `labels` as a long tensor `[N]` of class indices.
 
@@ -229,12 +275,23 @@ result = fit(model, train_loader, val_loader, config, run_dir="outputs/runs/resn
              on_epoch_end=lambda epoch, metrics: print(epoch, metrics))
 ```
 
-`fit` writes `last.pt`, `best.pt` (selected by `config.monitor`: `val_accuracy` or `val_loss`) and `history.json` (config plus per-epoch metrics) into `run_dir`. The `on_epoch_end` hook is where an experiment tracker such as MLflow or W&B can log metrics. Lower-level pieces (`train_one_epoch`, `validate`, `save_checkpoint`, `load_checkpoint`, `build_optimizer`) can be used directly.
+`fit` writes `last.pt`, `best.pt` (selected by `config.monitor`: `val_accuracy` or `val_loss`) and `history.json` (config plus per-epoch metrics) into `run_dir`. The `on_epoch_end` hook is where `MLflowTracker.log_epoch` plugs in. Lower-level pieces (`train_one_epoch`, `validate`, `save_checkpoint`, `load_checkpoint`, `build_optimizer`, `build_scheduler`) can be used directly.
+
+Training options in `TrainConfig` (and the `train:` section of the YAML file):
+
+| Option | Values | Meaning |
+|---|---|---|
+| `optimizer` | `sgd`, `adam`, `adamw` | With `learning_rate`, `momentum` (SGD), `weight_decay` |
+| `scheduler` | `none`, `cosine`, `step`, `plateau` | Per-epoch LR schedule; `min_lr` (cosine), `step_size`/`gamma` (step), `plateau_patience`/`gamma` (plateau) |
+| `warmup_epochs` | int | Linear LR warm-up before the schedule (not with `plateau`) |
+| `label_smoothing` | 0 – <1 | Applied to the training loss only; validation loss stays plain cross-entropy |
+| `early_stopping_patience` | int or `null` | Stop after this many epochs without improvement in `monitor` |
+| `aux_weight` | float | Weight of GoogLeNet's auxiliary losses (default 0.3) |
 
 ### Known limitations
 
-- No real-data training or accuracy results yet. `get_dataloaders()` from `src/data/dataset.py` already yields batches in the format `fit()` expects.
-- No learning-rate scheduler, early stopping or mixed precision yet.
+- No accuracy results reported yet; only a 3-epoch sanity run (ResNet-18, ~2% val accuracy) has been done on Colab.
+- No mixed precision; no resuming from `last.pt`.
 - Peak memory is only measured on CUDA.
 - Training VGG and GoogLeNet without BatchNorm from scratch on ~6k images may be unstable; `batch_norm=True` is available as a documented deviation.
 

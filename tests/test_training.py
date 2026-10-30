@@ -19,7 +19,7 @@ from src.evaluation.benchmark import benchmark_model, main as benchmark_main
 from src.evaluation.metrics import accuracy
 from src.models import create_model
 from src.training import (
-    TrainConfig, classification_loss, fit, load_checkpoint, save_checkpoint, set_seed,
+    TrainConfig, build_scheduler, classification_loss, fit, load_checkpoint, save_checkpoint, set_seed,
     split_outputs, train_one_epoch, validate,
 )
 
@@ -109,10 +109,78 @@ class TestTrainingLoop(unittest.TestCase):
         self.assertFalse(_is_improvement(0.6, 0.5, "min"))
 
     def test_invalid_config(self) -> None:
-        with self.assertRaises(ValueError):
-            TrainConfig(model_name="resnet18", num_classes=4, optimizer="rmsprop")
-        with self.assertRaises(ValueError):
-            TrainConfig(model_name="resnet18", num_classes=4, monitor="f1")
+        bad_values = [
+            {"optimizer": "rmsprop"}, {"monitor": "f1"}, {"scheduler": "linear"},
+            {"warmup_epochs": 30}, {"scheduler": "plateau", "warmup_epochs": 2},
+            {"label_smoothing": 1.0}, {"early_stopping_patience": 0},
+        ]
+        for values in bad_values:
+            with self.subTest(**values), self.assertRaises(ValueError):
+                TrainConfig(model_name="resnet18", num_classes=4, **values)
+
+    def test_early_stopping(self) -> None:
+        # lr=1e-9 on a model without BatchNorm: validation accuracy cannot improve after epoch 1.
+        config = TrainConfig(model_name="alexnet", num_classes=NUM_CLASSES, epochs=10, learning_rate=1e-9,
+                             scheduler="none", early_stopping_patience=2, device="cpu")
+        model = create_model("alexnet", num_classes=NUM_CLASSES)
+        with tempfile.TemporaryDirectory() as tmp:
+            result = fit(model, synthetic_loader(), synthetic_loader(), config, tmp)
+        self.assertTrue(result["stopped_early"])
+        self.assertEqual(len(result["history"]), 3)
+        self.assertEqual(result["best_epoch"], 1)
+
+    def test_checkpoint_extra_is_saved(self) -> None:
+        config = TrainConfig(model_name="resnet18", num_classes=NUM_CLASSES, epochs=1, device="cpu")
+        model = create_model("resnet18", num_classes=NUM_CLASSES)
+        with tempfile.TemporaryDirectory() as tmp:
+            fit(model, synthetic_loader(), synthetic_loader(), config, tmp, checkpoint_extra={"image_size": 64})
+            checkpoint = load_checkpoint(Path(tmp) / "best.pt", create_model("resnet18", num_classes=NUM_CLASSES))
+        self.assertEqual(checkpoint["extra"], {"image_size": 64})
+
+
+class TestSchedulers(unittest.TestCase):
+    @staticmethod
+    def learning_rates(**overrides) -> list[float]:
+        config = TrainConfig(model_name="resnet18", num_classes=NUM_CLASSES,
+                             **{"epochs": 10, "learning_rate": 0.1, **overrides})
+        optimizer = torch.optim.SGD([nn.Parameter(torch.zeros(1))], lr=config.learning_rate)
+        scheduler = build_scheduler(optimizer, config)
+        rates = []
+        for _ in range(config.epochs):
+            rates.append(optimizer.param_groups[0]["lr"])
+            optimizer.step()
+            if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                scheduler.step(0.5)  # constant metric -> plateau
+            elif scheduler is not None:
+                scheduler.step()
+        return rates
+
+    def test_none_is_constant(self) -> None:
+        self.assertEqual(set(self.learning_rates(scheduler="none")), {0.1})
+
+    def test_cosine_decays(self) -> None:
+        rates = self.learning_rates(scheduler="cosine")
+        self.assertAlmostEqual(rates[0], 0.1)
+        self.assertTrue(all(a >= b for a, b in zip(rates, rates[1:])))
+        self.assertLess(rates[-1], 0.01)
+
+    def test_warmup_then_cosine(self) -> None:
+        rates = self.learning_rates(scheduler="cosine", warmup_epochs=3)
+        self.assertLess(rates[0], rates[1])
+        self.assertLess(rates[1], rates[2])
+        self.assertAlmostEqual(rates[3], 0.1)
+        self.assertLess(rates[-1], rates[3])
+
+    def test_step(self) -> None:
+        rates = self.learning_rates(scheduler="step", step_size=4, gamma=0.5)
+        self.assertAlmostEqual(rates[3], 0.1)
+        self.assertAlmostEqual(rates[4], 0.05)
+        self.assertAlmostEqual(rates[8], 0.025)
+
+    def test_plateau_reduces_when_metric_stalls(self) -> None:
+        rates = self.learning_rates(scheduler="plateau", plateau_patience=2, gamma=0.1)
+        self.assertAlmostEqual(rates[0], 0.1)
+        self.assertLess(rates[-1], 0.1)
 
 
 class TestCheckpointAndSeed(unittest.TestCase):

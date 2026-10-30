@@ -59,6 +59,38 @@ def build_optimizer(model: nn.Module, config: TrainConfig) -> torch.optim.Optimi
     return torch.optim.AdamW(params, lr=config.learning_rate, weight_decay=config.weight_decay)
 
 
+Scheduler = Union[torch.optim.lr_scheduler.LRScheduler, torch.optim.lr_scheduler.ReduceLROnPlateau]
+
+
+def build_scheduler(optimizer: torch.optim.Optimizer, config: TrainConfig) -> Optional[Scheduler]:
+    """Create the per-epoch learning-rate scheduler named in ``config`` (``None`` for ``"none"``).
+
+    With ``warmup_epochs`` > 0 the learning rate rises linearly from
+    ``learning_rate / (warmup_epochs + 1)`` to ``learning_rate`` before the
+    main schedule starts.
+    """
+    lr_scheduler = torch.optim.lr_scheduler
+    if config.scheduler == "plateau":
+        return lr_scheduler.ReduceLROnPlateau(optimizer, mode=MONITORS[config.monitor], factor=config.gamma,
+                                              patience=config.plateau_patience)
+    main_epochs = config.epochs - config.warmup_epochs
+    if config.scheduler == "cosine":
+        main: Optional[lr_scheduler.LRScheduler] = lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=main_epochs, eta_min=config.min_lr)
+    elif config.scheduler == "step":
+        main = lr_scheduler.StepLR(optimizer, step_size=config.step_size, gamma=config.gamma)
+    else:
+        main = None
+
+    if config.warmup_epochs == 0:
+        return main
+    warmup = lr_scheduler.LinearLR(optimizer, start_factor=1.0 / (config.warmup_epochs + 1),
+                                   total_iters=config.warmup_epochs)
+    if main is None:
+        return warmup
+    return lr_scheduler.SequentialLR(optimizer, [warmup, main], milestones=[config.warmup_epochs])
+
+
 def train_one_epoch(
     model: nn.Module,
     loader: Batches,
@@ -105,58 +137,84 @@ def fit(
     run_dir: Union[str, Path],
     criterion: Optional[nn.Module] = None,
     on_epoch_end: Optional[EpochCallback] = None,
+    checkpoint_extra: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Train ``model`` for ``config.epochs`` epochs with validation after each one.
+    """Train ``model`` for up to ``config.epochs`` epochs with validation after each one.
 
     Writes to ``run_dir``:
         * ``last.pt``: checkpoint after the latest epoch
         * ``best.pt``: checkpoint with the best ``config.monitor`` value
         * ``history.json``: config + per-epoch metrics
 
+    The learning rate follows ``config.scheduler`` and training stops early
+    after ``config.early_stopping_patience`` epochs without improvement.
+
+    By default the training loss is cross-entropy with
+    ``config.label_smoothing`` and the validation loss is plain cross-entropy,
+    so validation losses stay comparable across runs. Passing ``criterion``
+    uses it for both.
+
     ``on_epoch_end(epoch, metrics)`` is called after every epoch and is the
-    hook for an experiment tracker (MLflow, W&B, ...).
+    hook for an experiment tracker (see ``src.training.tracking``).
+    ``checkpoint_extra`` (e.g. class names) is stored in every checkpoint.
 
     Call :func:`set_seed` *before* creating the model if weight initialization
     must be reproducible; ``fit`` re-seeds only for the training loop.
 
-    Returns a dict with ``history``, ``best_epoch`` and ``best_metric``.
+    Returns a dict with ``history``, ``best_epoch``, ``best_metric``,
+    ``stopped_early`` and ``run_dir``.
     """
     run_dir = Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
     set_seed(config.seed, config.deterministic)
     device = resolve_device(config.device)
     model.to(device)
-    criterion = criterion or nn.CrossEntropyLoss()
+    train_criterion = criterion or nn.CrossEntropyLoss(label_smoothing=config.label_smoothing)
+    val_criterion = criterion or nn.CrossEntropyLoss()
     optimizer = build_optimizer(model, config)
+    scheduler = build_scheduler(optimizer, config)
     mode = MONITORS[config.monitor]
 
     history: list[dict[str, float]] = []
     best_metric: Optional[float] = None
     best_epoch: Optional[int] = None
+    stopped_early = False
     for epoch in range(1, config.epochs + 1):
         start = time.perf_counter()
-        train_metrics = train_one_epoch(model, train_loader, criterion, optimizer, device, config.aux_weight)
-        val_metrics = validate(model, val_loader, criterion, device)
+        lr = optimizer.param_groups[0]["lr"]
+        train_metrics = train_one_epoch(model, train_loader, train_criterion, optimizer, device, config.aux_weight)
+        val_metrics = validate(model, val_loader, val_criterion, device)
         metrics = {
             "epoch": epoch,
             "train_loss": train_metrics["loss"],
             "train_accuracy": train_metrics["accuracy"],
             "val_loss": val_metrics["loss"],
             "val_accuracy": val_metrics["accuracy"],
-            "lr": optimizer.param_groups[0]["lr"],
+            "lr": lr,
             "epoch_seconds": time.perf_counter() - start,
         }
         history.append(metrics)
 
-        save_checkpoint(run_dir / "last.pt", model, optimizer, epoch, metrics, config.to_dict())
+        if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            scheduler.step(metrics[config.monitor])
+        elif scheduler is not None:
+            scheduler.step()
+
+        save_checkpoint(run_dir / "last.pt", model, optimizer, epoch, metrics, config.to_dict(), checkpoint_extra)
         if _is_improvement(metrics[config.monitor], best_metric, mode):
             best_metric, best_epoch = metrics[config.monitor], epoch
-            save_checkpoint(run_dir / "best.pt", model, optimizer, epoch, metrics, config.to_dict())
+            save_checkpoint(run_dir / "best.pt", model, optimizer, epoch, metrics, config.to_dict(),
+                            checkpoint_extra)
 
-        summary = {"config": config.to_dict(), "best_epoch": best_epoch,
-                   "best_metric": best_metric, "history": history}
+        patience = config.early_stopping_patience
+        stopped_early = patience is not None and epoch - best_epoch >= patience and epoch < config.epochs
+        summary = {"config": config.to_dict(), "best_epoch": best_epoch, "best_metric": best_metric,
+                   "stopped_early": stopped_early, "history": history}
         (run_dir / "history.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
         if on_epoch_end is not None:
             on_epoch_end(epoch, metrics)
+        if stopped_early:
+            break
 
-    return {"history": history, "best_epoch": best_epoch, "best_metric": best_metric}
+    return {"history": history, "best_epoch": best_epoch, "best_metric": best_metric,
+            "stopped_early": stopped_early, "run_dir": str(run_dir)}
