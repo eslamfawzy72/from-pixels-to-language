@@ -174,7 +174,7 @@ python -m src.cli evaluate --task classification --checkpoint outputs/runs/<run_
 python -m src.cli predict --task classification --checkpoint outputs/runs/<run_name>/best.pt --image bird.jpg
 ```
 
-Useful flags for `train`: `--model`, `--epochs`, `--lr`, `--batch-size`, `--optimizer`, `--scheduler`, `--seed`, `--run-name`, `--output-dir`, `--experiment`, `--tracking-uri`, `--no-tracking`, `--set`. Run `python -m src.cli train --help` for the full list.
+Useful flags for `train`: `--model`, `--epochs`, `--lr`, `--batch-size`, `--optimizer`, `--scheduler`, `--seed`, `--run-name`, `--output-dir`, `--experiment`, `--tracking-dir`, `--tracking-uri`, `--no-tracking`, `--set`. Run `python -m src.cli train --help` for the full list.
 
 Each run is saved to `outputs/runs/<run_name>/` (`best.pt`, `last.pt`, `history.json`). Checkpoints also store the class names and input size, so `predict` works without downloading the dataset.
 
@@ -182,19 +182,21 @@ Each run is saved to `outputs/runs/<run_name>/` (`best.pt`, `last.pt`, `history.
 
 With `tracking.enabled: true` (the default), every training run is logged to MLflow: all hyperparameters, parameter counts, per-epoch `train_loss`, `train_accuracy`, `val_loss`, `val_accuracy` and `lr` (shown as curves), the best epoch, `history.json`, and the checkpoint path. Set `tracking.log_checkpoints: true` to upload the `.pt` files too (VGG checkpoints exceed 1 GB).
 
+Runs are stored in one tracking folder (`tracking.dir`, default `outputs/mlflow/`) holding an SQLite database `mlflow.db` and an `artifacts/` folder. (Recent MLflow versions no longer accept the old `./mlruns` folder backend.) Open the MLflow UI with:
+
 ```bash
-mlflow ui --backend-store-uri ./mlruns        # then open http://127.0.0.1:5000
+mlflow ui --backend-store-uri sqlite:///outputs/mlflow/mlflow.db   # then open http://127.0.0.1:5000
 ```
 
-On Colab, store runs on Google Drive so they survive the session:
+On Colab, keep both the run folders and the tracking folder on Google Drive so they survive the session:
 
 ```bash
 python -m src.cli train --task classification \
     --output-dir /content/drive/MyDrive/from-pixels-to-language/runs \
-    --tracking-uri file:/content/drive/MyDrive/from-pixels-to-language/mlruns
+    --tracking-dir /content/drive/MyDrive/from-pixels-to-language/mlflow
 ```
 
-Afterwards, browse the runs locally with `mlflow ui --backend-store-uri <path to the downloaded mlruns folder>`.
+To browse those runs on your PC, download the Drive `mlflow` folder and run `mlflow ui --backend-store-uri sqlite:///<path>/mlflow/mlflow.db`. Artifact links point to the Drive paths; the metrics and parameters are all inside `mlflow.db`.
 
 ### Creating a model
 

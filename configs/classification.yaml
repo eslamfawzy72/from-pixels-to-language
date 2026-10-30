@@ -32,5 +32,6 @@ output:
 tracking:
   enabled: true
   experiment: classification
-  tracking_uri: null         # null -> ./mlruns; on Colab use a Drive path, e.g. file:/content/drive/MyDrive/from-pixels-to-language/mlruns
+  dir: outputs/mlflow        # holds mlflow.db + artifacts/; on Colab use a Drive folder, e.g. /content/drive/MyDrive/from-pixels-to-language/mlflow
+  tracking_uri: null         # optional MLflow server URI; overrides dir for the run metadata
   log_checkpoints: false     # upload .pt files to MLflow (large); the checkpoint path is always recorded

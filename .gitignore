@@ -37,6 +37,7 @@ desktop.ini
 mlruns/
 mlflow.db
 outputs/runs/
+outputs/mlflow/
 wandb/
 lightning_logs/
 tensorboard/

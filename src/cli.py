@@ -68,6 +68,7 @@ def resolve_train_settings(args: argparse.Namespace) -> dict[str, Any]:
         "train.seed": args.seed,
         "output.dir": args.output_dir,
         "output.run_name": args.run_name,
+        "tracking.dir": args.tracking_dir,
         "tracking.tracking_uri": args.tracking_uri,
         "tracking.experiment": args.experiment,
     }
@@ -104,6 +105,7 @@ def cmd_train(args: argparse.Namespace) -> None:
 
     if tracking.get("enabled", True):
         with MLflowTracker(tracking.get("experiment", "classification"), run_name=run_name,
+                           tracking_dir=tracking.get("dir", "outputs/mlflow"),
                            tracking_uri=tracking.get("tracking_uri"),
                            log_checkpoints=tracking.get("log_checkpoints", False),
                            tags={"task": args.task, "model": config.model_name}) as tracker:
@@ -146,7 +148,9 @@ def build_parser() -> argparse.ArgumentParser:
     train.add_argument("--output-dir", help="parent folder for run directories")
     train.add_argument("--run-name", help="run folder / MLflow run name (default: <model>_<timestamp>)")
     train.add_argument("--experiment", help="MLflow experiment name")
-    train.add_argument("--tracking-uri", help="MLflow tracking URI, e.g. file:/content/drive/MyDrive/.../mlruns")
+    train.add_argument("--tracking-dir", help="folder for the MLflow database and artifacts "
+                       "(default: outputs/mlflow; on Colab use a Google Drive folder)")
+    train.add_argument("--tracking-uri", help="MLflow tracking URI (e.g. a remote server); overrides --tracking-dir")
     train.add_argument("--no-tracking", action="store_true", help="disable MLflow tracking")
     train.add_argument("--set", action="append", metavar="SECTION.KEY=VALUE",
                        help="override any config value, e.g. --set train.model_kwargs.batch_norm=true")

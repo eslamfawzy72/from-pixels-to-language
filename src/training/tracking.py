@@ -2,7 +2,7 @@
 
 Usage:
 
-    with MLflowTracker("classification", run_name="resnet18_lr0.05") as tracker:
+    with MLflowTracker("classification", run_name="resnet18_lr0.05", tracking_dir="outputs/mlflow") as tracker:
         tracker.log_params(config.to_dict())
         result = fit(..., on_epoch_end=tracker.log_epoch)
         tracker.log_run_outputs(result)
@@ -12,16 +12,21 @@ training/validation curves), ``history.json`` and a reference to the
 checkpoints. Checkpoint files are only uploaded when ``log_checkpoints=True``,
 because VGG checkpoints exceed 1 GB.
 
-``tracking_uri`` chooses where runs are stored, e.g.
-``file:/content/drive/MyDrive/from-pixels-to-language/mlruns`` on Colab so they
-survive the session. ``None`` uses MLflow's default (``./mlruns`` or the
-``MLFLOW_TRACKING_URI`` environment variable).
+Where runs are stored:
+    * ``tracking_dir`` (recommended): one folder holding a SQLite database
+      (``mlflow.db``) and the logged files (``artifacts/``). On Colab, point it
+      at Google Drive so runs survive the session. Browse it with
+      ``mlflow ui --backend-store-uri sqlite:///<tracking_dir>/mlflow.db``.
+    * ``tracking_uri``: any MLflow tracking URI (e.g. a remote server);
+      overrides ``tracking_dir`` for the run metadata.
+Recent MLflow versions no longer accept the old ``./mlruns`` folder backend,
+which is why a SQLite database is used.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
 
 def _flatten(params: dict[str, Any], prefix: str = "") -> dict[str, Any]:
@@ -43,6 +48,7 @@ class MLflowTracker:
         self,
         experiment: str,
         run_name: Optional[str] = None,
+        tracking_dir: Optional[Union[str, Path]] = "outputs/mlflow",
         tracking_uri: Optional[str] = None,
         log_checkpoints: bool = False,
         tags: Optional[dict[str, str]] = None,
@@ -55,6 +61,12 @@ class MLflowTracker:
         self._mlflow = mlflow
         self.experiment = experiment
         self.run_name = run_name
+        self.artifact_location: Optional[str] = None
+        if tracking_dir is not None:
+            directory = Path(tracking_dir).resolve()
+            directory.mkdir(parents=True, exist_ok=True)
+            self.artifact_location = (directory / "artifacts").as_uri()
+            tracking_uri = tracking_uri or f"sqlite:///{(directory / 'mlflow.db').as_posix()}"
         self.tracking_uri = tracking_uri
         self.log_checkpoints = log_checkpoints
         self.tags = tags or {}
@@ -63,6 +75,8 @@ class MLflowTracker:
     def __enter__(self) -> "MLflowTracker":
         if self.tracking_uri:
             self._mlflow.set_tracking_uri(self.tracking_uri)
+        if self._mlflow.get_experiment_by_name(self.experiment) is None:
+            self._mlflow.create_experiment(self.experiment, artifact_location=self.artifact_location)
         self._mlflow.set_experiment(self.experiment)
         run = self._mlflow.start_run(run_name=self.run_name, tags=self.tags)
         self.run_id = run.info.run_id

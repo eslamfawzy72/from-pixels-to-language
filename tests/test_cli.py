@@ -7,6 +7,7 @@ with the same functions. Accuracies produced here are meaningless.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import json
 import sys
@@ -14,6 +15,7 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
+from typing import Iterator
 from unittest import mock
 
 import torch
@@ -56,13 +58,33 @@ def fake_data_modules() -> dict[str, types.ModuleType]:
     return {"src.data.dataset": dataset, "src.data.transforms": transforms}
 
 
-def write_config(directory: Path, tracking_uri: str, tracking_enabled: bool) -> Path:
+@contextlib.contextmanager
+def swapped_modules(replacements: dict[str, types.ModuleType]) -> Iterator[None]:
+    """Temporarily replace only the given entries of ``sys.modules``.
+
+    Unlike ``mock.patch.dict(sys.modules, ...)``, modules imported for the
+    first time inside the block (torch internals, mlflow, pandas) stay loaded.
+    """
+    missing = object()
+    originals = {name: sys.modules.get(name, missing) for name in replacements}
+    sys.modules.update(replacements)
+    try:
+        yield
+    finally:
+        for name, module in originals.items():
+            if module is missing:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = module
+
+
+def write_config(directory: Path, tracking_dir: Path, tracking_enabled: bool) -> Path:
     config = {
         "train": {"model_name": "resnet18", "num_classes": NUM_CLASSES, "epochs": 2, "batch_size": 4,
                   "learning_rate": 0.01, "warmup_epochs": 1, "device": "cpu"},
         "data": {"num_workers": 0, "image_size": IMAGE_SIZE},
         "output": {"dir": str(directory / "runs"), "run_name": "test_run"},
-        "tracking": {"enabled": tracking_enabled, "experiment": "unit-test", "tracking_uri": tracking_uri},
+        "tracking": {"enabled": tracking_enabled, "experiment": "unit-test", "dir": str(tracking_dir)},
     }
     path = directory / "config.yaml"
     path.write_text(json.dumps(config), encoding="utf-8")  # JSON is valid YAML
@@ -110,13 +132,13 @@ class TestSettings(unittest.TestCase):
 
 class TestEndToEnd(unittest.TestCase):
     def run_pipeline(self, tracking_enabled: bool) -> None:
-        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(sys.modules, fake_data_modules()):
+        # ignore_cleanup_errors: on Windows MLflow's SQLite connection keeps mlflow.db locked.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp, swapped_modules(fake_data_modules()):
             tmp_path = Path(tmp)
-            tracking_uri = (tmp_path / "mlruns").as_uri()
-            config_path = write_config(tmp_path, tracking_uri, tracking_enabled)
+            tracking_dir = tmp_path / "mlflow"
+            config_path = write_config(tmp_path, tracking_dir, tracking_enabled)
 
-            with mock.patch("sys.stdout"):
-                cli.main(["train", "--task", "classification", "--config", str(config_path)])
+            cli.main(["train", "--task", "classification", "--config", str(config_path)])
             run_dir = tmp_path / "runs" / "test_run"
             checkpoint = run_dir / "best.pt"
             self.assertTrue(checkpoint.is_file())
@@ -126,9 +148,8 @@ class TestEndToEnd(unittest.TestCase):
             self.assertEqual(len(history["history"]), 2)
             self.assertLess(history["history"][0]["lr"], history["history"][1]["lr"])  # warm-up
 
-            with mock.patch("sys.stdout"):
-                cli.main(["evaluate", "--task", "classification", "--checkpoint", str(checkpoint),
-                          "--num-workers", "0", "--device", "cpu"])
+            cli.main(["evaluate", "--task", "classification", "--checkpoint", str(checkpoint),
+                      "--num-workers", "0", "--device", "cpu"])
             test_metrics = json.loads((run_dir / "test_metrics.json").read_text(encoding="utf-8"))
             self.assertEqual(test_metrics["images"], 4)
 
@@ -147,7 +168,7 @@ class TestEndToEnd(unittest.TestCase):
             if tracking_enabled:
                 import mlflow
 
-                mlflow.set_tracking_uri(tracking_uri)
+                mlflow.set_tracking_uri(f"sqlite:///{(tracking_dir / 'mlflow.db').resolve().as_posix()}")
                 runs = mlflow.search_runs(experiment_names=["unit-test"])
                 self.assertEqual(len(runs), 1)
                 run = runs.iloc[0]
