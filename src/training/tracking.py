@@ -52,6 +52,7 @@ class MLflowTracker:
         tracking_uri: Optional[str] = None,
         log_checkpoints: bool = False,
         tags: Optional[dict[str, str]] = None,
+        nested: bool = False,
     ) -> None:
         try:
             import mlflow
@@ -70,6 +71,7 @@ class MLflowTracker:
         self.tracking_uri = tracking_uri
         self.log_checkpoints = log_checkpoints
         self.tags = tags or {}
+        self.nested = nested
         self.run_id: Optional[str] = None
 
     def __enter__(self) -> "MLflowTracker":
@@ -78,7 +80,7 @@ class MLflowTracker:
         if self._mlflow.get_experiment_by_name(self.experiment) is None:
             self._mlflow.create_experiment(self.experiment, artifact_location=self.artifact_location)
         self._mlflow.set_experiment(self.experiment)
-        run = self._mlflow.start_run(run_name=self.run_name, tags=self.tags)
+        run = self._mlflow.start_run(run_name=self.run_name, tags=self.tags, nested=self.nested)
         self.run_id = run.info.run_id
         return self
 
@@ -98,6 +100,15 @@ class MLflowTracker:
     def log_metrics(self, metrics: dict[str, float], prefix: str = "") -> None:
         """Log one-off metrics, e.g. final test results with ``prefix="test_"``."""
         self._mlflow.log_metrics({f"{prefix}{k}": float(v) for k, v in metrics.items()})
+
+    def log_metric(self, name: str, value: float, step: Optional[int] = None) -> None:
+        self._mlflow.log_metric(name, float(value), step=step)
+
+    def set_tags(self, tags: dict[str, Any]) -> None:
+        self._mlflow.set_tags({key: str(value) for key, value in tags.items()})
+
+    def log_artifact(self, path: Union[str, Path]) -> None:
+        self._mlflow.log_artifact(str(path))
 
     def log_run_outputs(self, result: dict[str, Any]) -> None:
         """Log the outcome of :func:`src.training.fit` and its files."""
