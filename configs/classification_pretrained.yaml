@@ -1,5 +1,8 @@
-# Transfer learning: ResNet-50 with ImageNet weights, fine-tuned on CUB.
+# Transfer learning: a ResNet with ImageNet weights, fine-tuned on CUB.
 #   python -m src.cli train --task classification --config configs/classification_pretrained.yaml
+#   python -m src.cli train --task classification --config configs/classification_pretrained.yaml --model resnet18_pretrained
+# resnet18_pretrained has the same architecture as the from-scratch ResNet-18 (fair comparison);
+# resnet50_pretrained is the bigger model used by most published CUB results. Both use these settings.
 # Same data, preprocessing and seed as the from-scratch runs (configs/classification.yaml);
 # only the model and the training settings below differ. The images are already normalized
 # with the ImageNet mean/std, which is what the pretrained weights expect.
