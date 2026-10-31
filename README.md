@@ -239,6 +239,24 @@ python -m src.cli tune --task classification --method grid \
 # same with --method random, then compare-tuning on the two Drive study folders
 ```
 
+### Transfer learning (pretrained ResNet-50)
+
+`resnet50_pretrained` is torchvision's ResNet-50 with ImageNet weights (`IMAGENET1K_V1`, the original release most published CUB results use). Its last layer (1000 ImageNet classes) is replaced with a new layer for the 200 species. It is the transfer-learning model compared against the from-scratch ResNet-18; our own `resnet50` cannot load the ImageNet weights because its layers are named differently. Code: [src/models/pretrained.py](src/models/pretrained.py).
+
+```bash
+# Fine-tune every layer (20 epochs, lr 0.01, weight decay 1e-4; see the YAML for why)
+python -m src.cli train --task classification --config configs/classification_pretrained.yaml
+
+# Optional: train only the new last layer (feature extraction), for comparison
+python -m src.cli train --task classification --config configs/classification_pretrained.yaml \
+    --set train.model_kwargs.freeze_backbone=true --run-name resnet50_frozen
+
+# Test evaluation, same as for any checkpoint
+python -m src.cli evaluate --task classification --checkpoint outputs/runs/<run_name>/best.pt
+```
+
+It uses the same data, preprocessing and seed as the from-scratch runs; the images are already normalized with the ImageNet mean and std that the weights expect. The weights (~100 MB) are downloaded once to `~/.cache/torch` the first time the model is built.
+
 ### Creating a model
 
 ```python

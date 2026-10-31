@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import unittest
 
+import torch
 from torch import nn
 
-from src.models import available_models, create_model
+from src.models import available_models, create_model, pretrained_models
 
-from ._utils import NUM_CLASSES
+from ._utils import NUM_CLASSES, dummy_batch
 
 ALL_MODELS = [
     "alexnet", "vgg16", "vgg19", "googlenet",
@@ -62,6 +63,35 @@ class TestFactory(unittest.TestCase):
         a = create_model("alexnet", num_classes=NUM_CLASSES)
         b = create_model("alexnet", num_classes=NUM_CLASSES)
         self.assertFalse(all((pa == pb).all() for pa, pb in zip(a.parameters(), b.parameters())))
+
+
+class TestPretrained(unittest.TestCase):
+    """pretrained=False builds the same network without downloading the ImageNet weights."""
+
+    def test_registered_apart_from_the_scratch_models(self) -> None:
+        self.assertEqual(pretrained_models(), ["resnet50_pretrained"])
+        self.assertNotIn("resnet50_pretrained", available_models())
+
+    def test_new_last_layer_outputs_num_classes(self) -> None:
+        model = create_model("resnet50_pretrained", num_classes=NUM_CLASSES, pretrained=False).eval()
+        images, _ = dummy_batch()
+        with torch.no_grad():
+            self.assertEqual(tuple(model(images).shape), (images.shape[0], NUM_CLASSES))
+        self.assertEqual(model.fc.in_features, 2048)
+
+    def test_fine_tuning_trains_every_layer(self) -> None:
+        model = create_model("resnet50_pretrained", num_classes=NUM_CLASSES, pretrained=False)
+        self.assertTrue(all(p.requires_grad for p in model.parameters()))
+
+    def test_freeze_backbone_trains_only_the_last_layer(self) -> None:
+        model = create_model("resnet50_pretrained", num_classes=NUM_CLASSES, pretrained=False,
+                             freeze_backbone=True)
+        trainable = [name for name, p in model.named_parameters() if p.requires_grad]
+        self.assertEqual(trainable, ["fc.weight", "fc.bias"])
+
+    def test_invalid_num_classes(self) -> None:
+        with self.assertRaises(ValueError):
+            create_model("resnet50_pretrained", num_classes=0, pretrained=False)
 
 
 if __name__ == "__main__":
