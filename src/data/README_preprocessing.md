@@ -98,6 +98,47 @@ ToRGB -> Letterbox 224 -> to tensor + normalize
 
 The reasons behind every decision, with figures, are in `notebooks/eda.ipynb` and `notebooks/image_preprocessing.ipynb`.
 
+### How captions are prepared (`src/data/captions.py`, for the captioning task)
+
+The `description` field holds ten captions joined by newlines. The rules come from the caption EDA (end of `notebooks/eda.ipynb`).
+
+| Step | What it does | Why |
+|---|---|---|
+| Split | Split on `\n`, drop empty pieces | One description holds ten captions |
+| Lowercase | `This` becomes `this` | Same word, one token |
+| Corrupted character `�` | Becomes a space | It stands for a space (`this��bird`); deleting it would merge words |
+| Apostrophes (`'` and `` ` ``) | Deleted: `bird's` becomes `birds` | Splitting on them creates a fake token `s` |
+| Numbers | Become words: `2white` becomes `two white`, `2.5` becomes `two point five`; numbers above 99 are dropped | Only words go into the vocabulary; the one large number is junk |
+| Other non-letters | Become a space: `reddish-brown` becomes `reddish brown` | Punctuation is inconsistent and carries no meaning here |
+| Spelling | `gray` becomes `grey`, `grayish` becomes `greyish`, `coloured` becomes `colored` | One spelling per word, the more frequent one |
+| Length (training only) | Drop captions under 3 or over 30 words | Removes noise (`this`) and rare very long captions; 98.6% fit in 30 |
+| Duplicates (training only) | Drop exact repeats inside one image | The same caption counted twice adds no information |
+| Vocabulary | Words seen at least 5 times in the **training split** captions, plus `<pad> <start> <end> <unk>` | Rare words are mostly typos; the validation and test captions are never used to build it |
+
+Validation and test captions get the same cleaning but no filtering, so the reference captions used for BLEU / ROUGE do not depend on training choices.
+
+Result on the training split (`python -m src.data.captions`):
+
+| | Captions |
+|---|---|
+| Raw (5,091 images × 10) | 50,910 |
+| Removed: fewer than 3 words | 1 |
+| Removed: more than 30 words | 676 |
+| Removed: duplicate within an image | 553 |
+| **Kept** | **49,680** |
+
+The vocabulary has 1,112 tokens (including the 4 special ones) and covers 99.49% of the training words. 0.61% of validation words and 0.62% of test words become `<unk>`. It is saved in `src/data/vocab_min5.json` (committed, like the split file).
+
+```python
+from src.data.captions import Vocabulary, preprocess_description
+
+vocab = Vocabulary.load()
+captions = preprocess_description(record["description"])           # training: list of token lists
+references = preprocess_description(record["description"], train=False)  # val / test references
+ids = vocab.encode(captions[0])   # [1, ..., 2, 0, 0, ...]: <start> words <end> <pad>..., length 32
+vocab.decode(ids)                 # back to a sentence
+```
+
 ---
 
 ## 3. The files
@@ -107,7 +148,9 @@ src/data/
 ├── data_loader.py    WHERE the images come from (Hugging Face)
 ├── splits.py         WHICH images are used (duplicates, train/val split)
 ├── transforms.py     HOW each image is prepared (RGB, letterbox, augmentation, normalization)
-└── dataset.py        PUTS IT TOGETHER (Dataset + DataLoaders)  <- what you normally use
+├── dataset.py        PUTS IT TOGETHER (Dataset + DataLoaders)  <- what you normally use
+├── captions.py       HOW each caption is prepared (cleaning, filtering, vocabulary)
+└── vocab_min5.json   the saved caption vocabulary (committed; rebuild with python -m src.data.captions)
 data/splits/
 └── train_val_seed42.json   the saved split (committed; do not edit by hand)
 ```

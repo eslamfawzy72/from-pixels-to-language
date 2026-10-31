@@ -35,7 +35,7 @@ The `label` feature defines **200 bird species**.
 
 ### Description field observation
 
-The `description` field contains multiple captions joined in one string and separated by newline characters (`\n`). Some captions appear noisy or potentially inaccurate. Caption statistics and cleaning have not yet been completed.
+The `description` field contains multiple captions joined in one string and separated by newline characters (`\n`). Some captions appear noisy or potentially inaccurate. Caption statistics are in the caption EDA section of `notebooks/eda.ipynb`; the cleaning rules are implemented in `src/data/captions.py` (see `README_preprocessing.md`).
 
 ## 2. Class Distribution Analysis
 
