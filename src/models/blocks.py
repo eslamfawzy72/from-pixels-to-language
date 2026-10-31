@@ -15,8 +15,8 @@ def check_num_classes(num_classes: int) -> None:
         raise ValueError(f"num_classes must be a positive integer, got {num_classes!r}")
 
 
-def initialize_weights(model: nn.Module) -> None:
-    """Randomly initialize a model from scratch.
+def initialize_weights(model: nn.Module) -> nn.Module:
+    """Randomly initialize a model from scratch, in place, and return it.
 
     Conv: Kaiming normal (fan_out, ReLU). BatchNorm: weight 1, bias 0.
     Linear: N(0, 0.01), bias 0.
@@ -32,6 +32,7 @@ def initialize_weights(model: nn.Module) -> None:
         elif isinstance(module, nn.Linear):
             nn.init.normal_(module.weight, mean=0.0, std=0.01)
             nn.init.zeros_(module.bias)
+    return model
 
 
 class ConvBlock(nn.Sequential):

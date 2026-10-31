@@ -1,4 +1,4 @@
-"""GoogLeNet (Inception v1).
+"""GoogLeNet (Inception v1) encoder.
 
 From the lecture:
     * aggressive stem: conv 7x7/2 (64) -> maxpool 3x3/2 -> conv 1x1 (64)
@@ -7,19 +7,23 @@ From the lecture:
     * global average pooling + a single linear layer (no large FC layers)
     * auxiliary classifiers at intermediate points (training-time only)
 
-The per-module channel widths, dropout rates and aux head layout are not in
-the lecture; they follow Table 1 of Szegedy et al., "Going deeper with
-convolutions" (CVPR 2015). LRN is omitted, matching the lecture's stem table.
+The classifier (global average pool -> dropout -> linear) and the two auxiliary
+classifiers are ``GoogLeNetHead`` in classifier.py. The auxiliary classifiers read
+the inception-4a and 4d feature maps, which this encoder returns on request.
+
+The per-module channel widths are not in the lecture; they follow Table 1 of
+Szegedy et al., "Going deeper with convolutions" (CVPR 2015). LRN is omitted,
+matching the lecture's stem table.
 """
 
 from __future__ import annotations
 
-from typing import NamedTuple, Optional, Union
+from typing import NamedTuple, Union
 
 import torch
 from torch import nn
 
-from .blocks import ConvBlock, InceptionAux, InceptionModule, check_num_classes, initialize_weights
+from .blocks import ConvBlock, InceptionModule
 
 # (in_channels, #1x1, #3x3 reduce, #3x3, #5x5 reduce, #5x5, pool proj)
 INCEPTION_SPECS: dict[str, tuple[int, int, int, int, int, int, int]] = {
@@ -36,50 +40,26 @@ INCEPTION_SPECS: dict[str, tuple[int, int, int, int, int, int, int]] = {
 
 
 class GoogLeNetOutputs(NamedTuple):
-    """Training-mode output when auxiliary classifiers are enabled."""
+    """Training-mode output of the GoogLeNet classifier when auxiliary classifiers are enabled."""
 
     logits: torch.Tensor
     aux1: torch.Tensor
     aux2: torch.Tensor
 
 
-class GoogLeNet(nn.Module):
-    """GoogLeNet / Inception v1 classifier.
+class GoogLeNetEncoder(nn.Module):
+    """Stem + Inception stages: image -> ``[N, 1024, 7, 7]`` for 224 inputs.
 
     Args:
-        num_classes: Number of output logits.
         in_channels: Input image channels.
-        aux_logits: Build the two auxiliary classifiers (after 4a and 4d).
-        batch_norm: Add BatchNorm after every conv (not in the original
-            network; the lecture notes BN makes aux classifiers unnecessary).
-        dropout: Dropout before the final linear layer (0.4 in the paper).
-        aux_dropout: Dropout inside the auxiliary heads (0.7 in the paper).
-
-    Output contract (exception to the common interface):
-        * ``model.train()`` with ``aux_logits=True``: returns
-          ``GoogLeNetOutputs(logits, aux1, aux2)``.
-        * otherwise: returns the main ``logits`` tensor only.
-      Use ``src.training.losses.classification_loss`` to handle both.
-
-    The auxiliary heads use a 5x5/3 average pool, so with ``aux_logits=True``
-    training inputs must be at least 72x72 (4a's feature map must be >= 5x5).
+        batch_norm: Add BatchNorm after every conv (not in the original network).
     """
 
-    feature_channels = 1024
+    out_channels = 1024
+    aux_channels = (512, 528)  # channels of the inception-4a and 4d outputs (auxiliary classifier inputs)
 
-    def __init__(
-        self,
-        num_classes: int,
-        in_channels: int = 3,
-        aux_logits: bool = True,
-        batch_norm: bool = False,
-        dropout: float = 0.4,
-        aux_dropout: float = 0.7,
-    ) -> None:
+    def __init__(self, in_channels: int = 3, batch_norm: bool = False) -> None:
         super().__init__()
-        check_num_classes(num_classes)
-        self.aux_logits = aux_logits
-
         self.stem = nn.Sequential(
             ConvBlock(in_channels, 64, kernel_size=7, stride=2, padding=3, batch_norm=batch_norm),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
@@ -103,38 +83,14 @@ class GoogLeNet(nn.Module):
         self.inception5a = inception("5a")
         self.inception5b = inception("5b")
 
-        self.aux1: Optional[InceptionAux] = None
-        self.aux2: Optional[InceptionAux] = None
-        if aux_logits:
-            self.aux1 = InceptionAux(self.inception4a.out_channels, num_classes, batch_norm, aux_dropout)
-            self.aux2 = InceptionAux(self.inception4d.out_channels, num_classes, batch_norm, aux_dropout)
-
-        self.avgpool = nn.AdaptiveAvgPool2d(1)
-        self.dropout = nn.Dropout(dropout)
-        self.fc = nn.Linear(self.inception5b.out_channels, num_classes)
-        initialize_weights(self)
-
-    def _trunk(self, x: torch.Tensor) -> tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
-        """Run stem + Inception stages; aux outputs are computed only in training mode."""
-        use_aux = self.training and self.aux_logits
+    def forward(
+        self, x: torch.Tensor, return_aux_features: bool = False
+    ) -> Union[torch.Tensor, tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]]:
+        """Return the inception-5b feature map; with ``return_aux_features`` also the 4a and 4d maps."""
         x = self.stem(x)
         x = self.inception3b(self.inception3a(x))
-        x = self.inception4a(self.pool3(x))
-        aux1 = self.aux1(x) if use_aux else None
-        x = self.inception4d(self.inception4c(self.inception4b(x)))
-        aux2 = self.aux2(x) if use_aux else None
-        x = self.inception4e(x)
+        after_4a = self.inception4a(self.pool3(x))
+        after_4d = self.inception4d(self.inception4c(self.inception4b(after_4a)))
+        x = self.inception4e(after_4d)
         x = self.inception5b(self.inception5a(self.pool4(x)))
-        return x, aux1, aux2
-
-    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
-        """Return the inception-5b feature map, ``[N, 1024, 7, 7]`` for 224 inputs."""
-        features, _, _ = self._trunk(x)
-        return features
-
-    def forward(self, x: torch.Tensor) -> Union[torch.Tensor, GoogLeNetOutputs]:
-        features, aux1, aux2 = self._trunk(x)
-        logits = self.fc(self.dropout(torch.flatten(self.avgpool(features), 1)))
-        if aux1 is not None and aux2 is not None:
-            return GoogLeNetOutputs(logits, aux1, aux2)
-        return logits
+        return (x, (after_4a, after_4d)) if return_aux_features else x

@@ -1,20 +1,23 @@
-"""CNN architectures implemented from scratch, plus pretrained models for transfer learning."""
+"""Models: encoders (image -> feature map) and classifiers (encoder + head).
 
-from .alexnet import AlexNet
-from .factory import available_models, create_model, pretrained_models
-from .googlenet import GoogLeNet, GoogLeNetOutputs
-from .resnet import ResNet
-from .utils import count_parameters
-from .vgg import VGG
+    encoder.py     build_encoder(name): from-scratch or ImageNet-pretrained encoders
+    classifier.py  create_model(name, num_classes): encoder + classifier head
+    alexnet.py, vgg.py, googlenet.py, resnet.py, blocks.py: the from-scratch architectures
+"""
+
+from .classifier import (ImageClassifier, available_models, count_parameters, create_model, pretrained_models,
+                         upgrade_state_dict)
+from .encoder import available_encoders, build_encoder
+from .googlenet import GoogLeNetOutputs
 
 __all__ = [
-    "AlexNet",
-    "GoogLeNet",
     "GoogLeNetOutputs",
-    "ResNet",
-    "VGG",
+    "ImageClassifier",
+    "available_encoders",
     "available_models",
+    "build_encoder",
     "count_parameters",
     "create_model",
     "pretrained_models",
+    "upgrade_state_dict",
 ]

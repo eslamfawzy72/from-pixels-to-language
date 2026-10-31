@@ -1,4 +1,4 @@
-"""Model factory tests."""
+"""Model creation tests: names, options and the pretrained models."""
 
 from __future__ import annotations
 
@@ -28,13 +28,14 @@ class TestFactory(unittest.TestCase):
         self.assertEqual(last_linear.out_features, 7)
 
     def test_name_is_case_and_dash_insensitive(self) -> None:
-        self.assertEqual(type(create_model(" AlexNet ", num_classes=NUM_CLASSES)).__name__, "AlexNet")
+        model = create_model(" AlexNet ", num_classes=NUM_CLASSES)
+        self.assertEqual(type(model.encoder).__name__, "AlexNetEncoder")
 
     def test_googlenet_alias(self) -> None:
         if "googlenet" not in available_models():
             self.skipTest("googlenet not registered yet")
         model = create_model("Inception-v1", num_classes=NUM_CLASSES, aux_logits=False)
-        self.assertEqual(type(model).__name__, "GoogLeNet")
+        self.assertEqual(type(model.encoder).__name__, "GoogLeNetEncoder")
 
     def test_unknown_name_lists_available_models(self) -> None:
         with self.assertRaises(ValueError) as ctx:
@@ -81,7 +82,7 @@ class TestPretrained(unittest.TestCase):
                 model = create_model(name, num_classes=NUM_CLASSES, pretrained=False).eval()
                 with torch.no_grad():
                     self.assertEqual(tuple(model(images).shape), (images.shape[0], NUM_CLASSES))
-                self.assertEqual(model.fc.in_features, features)
+                self.assertEqual(model.head.fc.in_features, features)
 
     def test_fine_tuning_trains_every_layer(self) -> None:
         for name in self.FEATURES:
@@ -94,7 +95,7 @@ class TestPretrained(unittest.TestCase):
             with self.subTest(model=name):
                 model = create_model(name, num_classes=NUM_CLASSES, pretrained=False, freeze_backbone=True)
                 trainable = [n for n, p in model.named_parameters() if p.requires_grad]
-                self.assertEqual(trainable, ["fc.weight", "fc.bias"])
+                self.assertEqual(trainable, ["head.fc.weight", "head.fc.bias"])
 
     def test_invalid_num_classes(self) -> None:
         for name in self.FEATURES:

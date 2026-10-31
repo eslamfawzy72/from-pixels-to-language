@@ -14,7 +14,7 @@ from typing import Any, Optional, Sequence, Union
 import torch
 from torch import nn
 
-from src.models import count_parameters, create_model
+from src.models import count_parameters, create_model, upgrade_state_dict
 from src.training import TrainConfig, fit, resolve_device, set_seed, validate
 from src.training.tracking import MLflowTracker
 
@@ -133,7 +133,7 @@ def load_model_from_checkpoint(checkpoint_path: PathLike, device: torch.device) 
     if "model_name" not in config:
         raise ValueError(f"{checkpoint_path} has no model config; was it saved by src.training.fit?")
     model = create_model(config["model_name"], num_classes=config["num_classes"], **config.get("model_kwargs", {}))
-    model.load_state_dict(checkpoint["model_state"])
+    model.load_state_dict(upgrade_state_dict(checkpoint["model_state"]))  # also loads pre-split checkpoints
     return model.to(device).eval(), checkpoint
 
 

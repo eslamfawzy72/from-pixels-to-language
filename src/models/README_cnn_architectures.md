@@ -71,7 +71,7 @@ Parameter counts at 1000 classes match the published reference counts: 11,689,51
 
 - **Initialization:** Kaiming-normal for convs (fan-out, ReLU), BatchNorm weight 1 / bias 0, Linear N(0, 0.01). Conv biases are dropped when a BatchNorm follows.
 - **Outputs are raw logits.** No softmax inside the models; use `nn.CrossEntropyLoss`.
-- **`forward_features(x)`** returns the last convolutional feature map of every model. It is the hook for reusing the encoder in the colorization and captioning tasks and for choosing a Grad-CAM target layer.
+- **Encoder + head.** Every model is `ImageClassifier(encoder, head)` (`classifier.py`). Each architecture file defines only the encoder (conv layers -> last feature map); the fully connected part is a head in `classifier.py` (`FCHead` for AlexNet/VGG, `LinearHead` for ResNet, `GoogLeNetHead` for GoogLeNet). `model.encoder` (or `build_encoder(name)` in `encoder.py`) is the hook for reusing the encoder in the colorization and captioning tasks and for choosing a Grad-CAM target layer. The layers and parameter counts are unchanged by the split.
 - **`in_channels`** is configurable on every model (for example `1` for grayscale input).
 
 ## 2. Input-size behaviour

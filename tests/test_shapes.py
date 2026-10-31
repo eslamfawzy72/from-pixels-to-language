@@ -91,10 +91,10 @@ class TestIntermediateShapes(unittest.TestCase):
     def test_alexnet_matches_lecture_table_at_227(self) -> None:
         model = create_model("alexnet", num_classes=NUM_CLASSES).eval()
         layers = {
-            "conv1": model.features[0], "pool1": model.features[2],
-            "conv2": model.features[3], "pool2": model.features[5],
-            "conv3": model.features[6], "conv4": model.features[8],
-            "conv5": model.features[10], "pool5": model.features[12],
+            "conv1": model.encoder.features[0], "pool1": model.encoder.features[2],
+            "conv2": model.encoder.features[3], "pool2": model.encoder.features[5],
+            "conv3": model.encoder.features[6], "conv4": model.encoder.features[8],
+            "conv5": model.encoder.features[10], "pool5": model.encoder.features[12],
         }
         shapes = capture_shapes(model, layers, torch.randn(1, 3, 227, 227))
         expected = {
@@ -104,7 +104,7 @@ class TestIntermediateShapes(unittest.TestCase):
             "conv5": (256, 13, 13), "pool5": (256, 6, 6),
         }
         self.assertEqual(shapes, expected)
-        self.assertEqual(model.classifier[1].in_features, 9216)
+        self.assertEqual(model.head.classifier[1].in_features, 9216)
 
     @requires("vgg16", "vgg19")
     def test_vgg_stage_outputs(self) -> None:
@@ -112,21 +112,21 @@ class TestIntermediateShapes(unittest.TestCase):
         for name, convs in (("vgg16", 13), ("vgg19", 16)):
             with self.subTest(model=name):
                 model = create_model(name, num_classes=NUM_CLASSES).eval()
-                pools = [m for m in model.features if isinstance(m, nn.MaxPool2d)]
-                conv_layers = [m for m in model.features.modules() if isinstance(m, nn.Conv2d)]
+                pools = [m for m in model.encoder.features if isinstance(m, nn.MaxPool2d)]
+                conv_layers = [m for m in model.encoder.features.modules() if isinstance(m, nn.Conv2d)]
                 self.assertEqual(len(conv_layers), convs)
                 self.assertTrue(all(c.kernel_size == (3, 3) and c.stride == (1, 1) and c.padding == (1, 1)
                                     for c in conv_layers))
                 shapes = capture_shapes(model, {str(i): p for i, p in enumerate(pools)}, torch.randn(1, 3, 224, 224))
                 self.assertEqual([shapes[str(i)] for i in range(5)], expected_pools)
-                self.assertEqual(model.classifier[1].in_features, 25088)
+                self.assertEqual(model.head.classifier[1].in_features, 25088)
 
     @requires("googlenet")
     def test_googlenet_stem_and_inception_outputs(self) -> None:
         model = create_model("googlenet", num_classes=NUM_CLASSES).eval()
         names = ["stem", "inception3a", "inception3b", "inception4a", "inception4b", "inception4c",
                  "inception4d", "inception4e", "inception5a", "inception5b"]
-        shapes = capture_shapes(model, {n: getattr(model, n) for n in names}, torch.randn(1, 3, 224, 224))
+        shapes = capture_shapes(model, {n: getattr(model.encoder, n) for n in names}, torch.randn(1, 3, 224, 224))
         expected = {
             "stem": (192, 28, 28),
             "inception3a": (256, 28, 28), "inception3b": (480, 28, 28),
@@ -136,7 +136,7 @@ class TestIntermediateShapes(unittest.TestCase):
         }
         self.assertEqual(shapes, expected)
         for n in names[1:]:
-            self.assertEqual(getattr(model, n).out_channels, expected[n][0])
+            self.assertEqual(getattr(model.encoder, n).out_channels, expected[n][0])
 
     @requires("googlenet")
     def test_googlenet_train_mode_returns_aux_outputs(self) -> None:
@@ -155,7 +155,7 @@ class TestIntermediateShapes(unittest.TestCase):
     def test_googlenet_without_aux_returns_tensor_in_train_mode(self) -> None:
         images, _ = dummy_batch()
         model = create_model("googlenet", num_classes=NUM_CLASSES, aux_logits=False).train()
-        self.assertIsNone(model.aux1)
+        self.assertIsNone(model.head.aux1)
         self.assertIsInstance(model(images), torch.Tensor)
 
     @requires("resnet18", "resnet34", "resnet50", "resnet101", "resnet152")
@@ -163,7 +163,7 @@ class TestIntermediateShapes(unittest.TestCase):
         for name, expansion in (("resnet18", 1), ("resnet34", 1), ("resnet50", 4), ("resnet101", 4), ("resnet152", 4)):
             with self.subTest(model=name):
                 model = create_model(name, num_classes=NUM_CLASSES).eval()
-                stages = {n: getattr(model, n) for n in ("stem", "layer1", "layer2", "layer3", "layer4")}
+                stages = {n: getattr(model.encoder, n) for n in ("stem", "layer1", "layer2", "layer3", "layer4")}
                 shapes = capture_shapes(model, stages, torch.randn(1, 3, 224, 224))
                 self.assertEqual(shapes["stem"], (64, 56, 56))
                 for i, (width, size) in enumerate(((64, 56), (128, 28), (256, 14), (512, 7)), start=1):
@@ -178,7 +178,7 @@ class TestIntermediateShapes(unittest.TestCase):
         for name, counts in expected.items():
             with self.subTest(model=name):
                 model = create_model(name, num_classes=NUM_CLASSES)
-                self.assertEqual(tuple(len(getattr(model, f"layer{i}")) for i in range(1, 5)), counts)
+                self.assertEqual(tuple(len(getattr(model.encoder, f"layer{i}")) for i in range(1, 5)), counts)
 
     @requires("resnet18", "resnet50")
     def test_resnet_shortcuts(self) -> None:

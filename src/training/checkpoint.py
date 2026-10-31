@@ -48,8 +48,10 @@ def load_checkpoint(
     map_location: Union[str, torch.device] = "cpu",
 ) -> dict[str, Any]:
     """Load weights into ``model`` (and ``optimizer`` if given); return the checkpoint dict."""
+    from src.models import upgrade_state_dict
+
     checkpoint = torch.load(path, map_location=map_location, weights_only=True)
-    model.load_state_dict(checkpoint["model_state"])
+    model.load_state_dict(upgrade_state_dict(checkpoint["model_state"]))  # also loads pre-split checkpoints
     if optimizer is not None:
         if checkpoint["optimizer_state"] is None:
             raise ValueError(f"{path} contains no optimizer state")

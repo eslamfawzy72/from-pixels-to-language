@@ -132,13 +132,13 @@ Architecture details, deviations from the lecture and the data-integration contr
 
 ```text
 src/models/
+├── encoder.py       # build_encoder(name): image -> feature map (from scratch or ImageNet-pretrained)
+├── classifier.py    # create_model(name, num_classes): encoder + classifier head; count_parameters
 ├── blocks.py        # ConvBlock, InceptionModule, InceptionAux, BasicBlock, Bottleneck, weight init
-├── alexnet.py       # AlexNet
-├── vgg.py           # Config-driven VGG builder (vgg16, vgg19)
-├── googlenet.py     # GoogLeNet + GoogLeNetOutputs
-├── resnet.py        # Config-driven ResNet builder (resnet18 … resnet152)
-├── factory.py       # create_model(name, num_classes, **kwargs)
-└── utils.py         # count_parameters
+├── alexnet.py       # AlexNet encoder
+├── vgg.py           # VGG encoders (vgg16, vgg19)
+├── googlenet.py     # GoogLeNet encoder + GoogLeNetOutputs
+└── resnet.py        # ResNet encoders (resnet18 … resnet152)
 src/training/
 ├── config.py        # TrainConfig dataclass (optimizer, LR schedule, early stopping, ...)
 ├── losses.py        # Loss handling for models with auxiliary outputs
@@ -241,7 +241,7 @@ python -m src.cli tune --task classification --method grid \
 
 ### Transfer learning (pretrained ResNet-18 and ResNet-50)
 
-Two torchvision models with ImageNet weights (`IMAGENET1K_V1`, the original release most published CUB results use). In both, the last layer (1000 ImageNet classes) is replaced with a new layer for the 200 species. Our own ResNets cannot load the ImageNet weights because their layers are named differently. Code: [src/models/pretrained.py](src/models/pretrained.py).
+Two torchvision models with ImageNet weights (`IMAGENET1K_V1`, the original release most published CUB results use). In both, the last layer (1000 ImageNet classes) is replaced with a new layer for the 200 species. Our own ResNets cannot load the ImageNet weights because their layers are named differently. Code: `PretrainedResNetEncoder` in [src/models/encoder.py](src/models/encoder.py).
 
 | Model | Compared with | What the comparison shows |
 |---|---|---|
@@ -275,9 +275,33 @@ print(available_models())
 
 model = create_model("resnet18", num_classes=200)
 logits = model(torch.randn(8, 3, 224, 224))      # [8, 200], raw logits (no softmax)
-features = model.forward_features(torch.randn(8, 3, 224, 224))  # last conv feature map
+features = model.encoder(torch.randn(8, 3, 224, 224))  # [8, 512, 7, 7], the encoder's feature map
 total, trainable = count_parameters(model)
 ```
+
+Every model is an **encoder** followed by a **classifier head**: `logits = model.head(model.encoder(images))`.
+
+```text
+image -> encoder -> feature map [N, C, 7, 7] -> head -> logits [N, 200]
+                         └── reused by colorization and captioning (Milestone 2)
+```
+
+| Head | Used by | Layers |
+|---|---|---|
+| `LinearHead` | ResNets, pretrained ResNets | global average pool -> linear |
+| `FCHead` | AlexNet, VGG | pool to 6×6 / 7×7 -> FC 4096 -> FC 4096 -> FC |
+| `GoogLeNetHead` | GoogLeNet | global average pool -> dropout -> linear, plus two auxiliary classifiers |
+
+An encoder can also be built on its own, e.g. as the backbone of another task:
+
+```python
+from src.models import build_encoder
+
+encoder = build_encoder("resnet50_pretrained", freeze=True)   # ImageNet weights, not trained further
+features = encoder(images)                                     # [N, encoder.out_channels, 7, 7]
+```
+
+Checkpoints saved before the split (layer names without the `encoder.` / `head.` prefix) still load: `evaluate`, `predict` and `load_checkpoint` rename the weights automatically (`upgrade_state_dict`).
 
 Common options (passed as keyword arguments to `create_model`):
 
