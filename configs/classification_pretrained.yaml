@@ -1,0 +1,42 @@
+# Transfer learning: a ResNet with ImageNet weights, fine-tuned on CUB.
+#   python -m src.cli train --task classification --config configs/classification_pretrained.yaml
+#   python -m src.cli train --task classification --config configs/classification_pretrained.yaml --model resnet18_pretrained
+# resnet18_pretrained has the same architecture as the from-scratch ResNet-18 (fair comparison);
+# resnet50_pretrained is the bigger model used by most published CUB results. Both use these settings.
+# Same data, preprocessing and seed as the from-scratch runs (configs/classification.yaml);
+# only the model and the training settings below differ. The images are already normalized
+# with the ImageNet mean/std, which is what the pretrained weights expect.
+
+train:
+  model_name: resnet50_pretrained
+  num_classes: 200
+  model_kwargs: {}             # {freeze_backbone: true} trains only the last layer
+  epochs: 20                   # the weights are already good: far fewer epochs than from scratch (60)
+  batch_size: 32
+  optimizer: sgd
+  learning_rate: 0.01          # 5x lower than from scratch (0.05), so the ImageNet features are not destroyed
+  momentum: 0.9
+  weight_decay: 0.0001         # the standard ImageNet value for ResNet-50
+  scheduler: cosine
+  warmup_epochs: 1             # the new last layer starts random: warm up so its first large gradients do not disturb the rest
+  min_lr: 0.0
+  label_smoothing: 0.1
+  early_stopping_patience: 5
+  monitor: val_accuracy
+  seed: 42
+  device: auto
+
+data:
+  num_workers: 2
+  image_size: 224
+
+output:
+  dir: outputs/runs
+  run_name: null               # null -> resnet50_pretrained_<timestamp>, so a rerun never overwrites a run
+
+tracking:
+  enabled: true
+  experiment: classification   # same experiment as the from-scratch runs, so MLflow can compare them
+  dir: outputs/mlflow
+  tracking_uri: null
+  log_checkpoints: false

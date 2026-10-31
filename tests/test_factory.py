@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import unittest
 
+import torch
 from torch import nn
 
-from src.models import available_models, create_model
+from src.models import available_models, create_model, pretrained_models
 
-from ._utils import NUM_CLASSES
+from ._utils import NUM_CLASSES, dummy_batch
 
 ALL_MODELS = [
     "alexnet", "vgg16", "vgg19", "googlenet",
@@ -62,6 +63,43 @@ class TestFactory(unittest.TestCase):
         a = create_model("alexnet", num_classes=NUM_CLASSES)
         b = create_model("alexnet", num_classes=NUM_CLASSES)
         self.assertFalse(all((pa == pb).all() for pa, pb in zip(a.parameters(), b.parameters())))
+
+
+class TestPretrained(unittest.TestCase):
+    """pretrained=False builds the same network without downloading the ImageNet weights."""
+
+    FEATURES = {"resnet18_pretrained": 512, "resnet50_pretrained": 2048}  # inputs of the last layer
+
+    def test_registered_apart_from_the_scratch_models(self) -> None:
+        self.assertEqual(pretrained_models(), list(self.FEATURES))
+        self.assertFalse(set(pretrained_models()) & set(available_models()))
+
+    def test_new_last_layer_outputs_num_classes(self) -> None:
+        images, _ = dummy_batch()
+        for name, features in self.FEATURES.items():
+            with self.subTest(model=name):
+                model = create_model(name, num_classes=NUM_CLASSES, pretrained=False).eval()
+                with torch.no_grad():
+                    self.assertEqual(tuple(model(images).shape), (images.shape[0], NUM_CLASSES))
+                self.assertEqual(model.fc.in_features, features)
+
+    def test_fine_tuning_trains_every_layer(self) -> None:
+        for name in self.FEATURES:
+            with self.subTest(model=name):
+                model = create_model(name, num_classes=NUM_CLASSES, pretrained=False)
+                self.assertTrue(all(p.requires_grad for p in model.parameters()))
+
+    def test_freeze_backbone_trains_only_the_last_layer(self) -> None:
+        for name in self.FEATURES:
+            with self.subTest(model=name):
+                model = create_model(name, num_classes=NUM_CLASSES, pretrained=False, freeze_backbone=True)
+                trainable = [n for n, p in model.named_parameters() if p.requires_grad]
+                self.assertEqual(trainable, ["fc.weight", "fc.bias"])
+
+    def test_invalid_num_classes(self) -> None:
+        for name in self.FEATURES:
+            with self.subTest(model=name), self.assertRaises(ValueError):
+                create_model(name, num_classes=0, pretrained=False)
 
 
 if __name__ == "__main__":

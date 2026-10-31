@@ -241,6 +241,31 @@ python -m src.cli tune --task classification --method grid \
 # same with --method random, then compare-tuning on the two Drive study folders
 ```
 
+### Transfer learning (pretrained ResNet-18 and ResNet-50)
+
+Two torchvision models with ImageNet weights (`IMAGENET1K_V1`, the original release most published CUB results use). In both, the last layer (1000 ImageNet classes) is replaced with a new layer for the 200 species. Our own ResNets cannot load the ImageNet weights because their layers are named differently. Code: [src/models/pretrained.py](src/models/pretrained.py).
+
+| Model | Compared with | What the comparison shows |
+|---|---|---|
+| `resnet18_pretrained` | from-scratch `resnet18` (same architecture, same 11.3M parameters) | the effect of pretraining alone |
+| `resnet50_pretrained` | `resnet18_pretrained` (both pretrained) and published CUB results | the effect of a bigger model; benchmarking |
+
+```bash
+# Fine-tune every layer (20 epochs, lr 0.01, weight decay 1e-4; see the YAML for why)
+python -m src.cli train --task classification --config configs/classification_pretrained.yaml
+python -m src.cli train --task classification --config configs/classification_pretrained.yaml \
+    --model resnet18_pretrained --run-name resnet18_pretrained
+
+# Optional: train only the new last layer (feature extraction), for comparison
+python -m src.cli train --task classification --config configs/classification_pretrained.yaml \
+    --set train.model_kwargs.freeze_backbone=true --run-name resnet50_frozen
+
+# Test evaluation, same as for any checkpoint
+python -m src.cli evaluate --task classification --checkpoint outputs/runs/<run_name>/best.pt
+```
+
+It uses the same data, preprocessing and seed as the from-scratch runs; the images are already normalized with the ImageNet mean and std that the weights expect. The weights (~45 MB for ResNet-18, ~100 MB for ResNet-50) are downloaded once to `~/.cache/torch` the first time the model is built.
+
 ### Creating a model
 
 ```python
