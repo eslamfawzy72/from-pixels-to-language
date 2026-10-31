@@ -68,7 +68,8 @@ class TestFactory(unittest.TestCase):
 class TestPretrained(unittest.TestCase):
     """pretrained=False builds the same network without downloading the ImageNet weights."""
 
-    FEATURES = {"resnet18_pretrained": 512, "resnet50_pretrained": 2048}  # inputs of the last layer
+    FEATURES = {"resnet18_pretrained": 512, "resnet50_pretrained": 2048, "vgg16_pretrained": 4096}  # inputs of the last layer
+    LAST_LAYER = {"resnet18_pretrained": "fc", "resnet50_pretrained": "fc", "vgg16_pretrained": "classifier.6"}
 
     def test_registered_apart_from_the_scratch_models(self) -> None:
         self.assertEqual(pretrained_models(), list(self.FEATURES))
@@ -81,7 +82,7 @@ class TestPretrained(unittest.TestCase):
                 model = create_model(name, num_classes=NUM_CLASSES, pretrained=False).eval()
                 with torch.no_grad():
                     self.assertEqual(tuple(model(images).shape), (images.shape[0], NUM_CLASSES))
-                self.assertEqual(model.fc.in_features, features)
+                self.assertEqual(model.get_submodule(self.LAST_LAYER[name]).in_features, features)
 
     def test_fine_tuning_trains_every_layer(self) -> None:
         for name in self.FEATURES:
@@ -94,7 +95,8 @@ class TestPretrained(unittest.TestCase):
             with self.subTest(model=name):
                 model = create_model(name, num_classes=NUM_CLASSES, pretrained=False, freeze_backbone=True)
                 trainable = [n for n, p in model.named_parameters() if p.requires_grad]
-                self.assertEqual(trainable, ["fc.weight", "fc.bias"])
+                last = self.LAST_LAYER[name]
+                self.assertEqual(trainable, [f"{last}.weight", f"{last}.bias"])
 
     def test_invalid_num_classes(self) -> None:
         for name in self.FEATURES:
