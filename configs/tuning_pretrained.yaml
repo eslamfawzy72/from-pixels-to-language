@@ -1,0 +1,31 @@
+# Search settings for the pretrained ResNet-18 (transfer learning):
+#   python -m src.cli tune --task classification --config configs/classification_pretrained.yaml \
+#       --model resnet18_pretrained --space configs/tuning_pretrained.yaml --method grid|random
+# Same structure as configs/tuning.yaml (from-scratch search). The learning rates are ~10x lower,
+# because large updates would destroy the ImageNet features the model starts from.
+# Trials are compared on train.monitor (val_accuracy) of the validation split; the test split is never used.
+
+trial:                         # short trials: same seed, same data, only the tuned values differ
+  epochs: 8                    # pretrained models converge much faster than from scratch (12-epoch trials)
+  warmup_epochs: 1
+  early_stopping_patience: null
+  monitor: val_accuracy        # trials are ranked by validation accuracy only
+
+grid:
+  learning_rate: [0.001, 0.003, 0.01]
+  weight_decay: [0.0001, 0.0005]
+  label_smoothing: [0.0, 0.1, 0.2]
+# Fractional grid, as in configs/tuning.yaml: learning_rate x weight_decay fully crossed (6 trials),
+# label_smoothing rotated across them so each of its values is used in 2 trials.
+grid_crossed: [learning_rate, weight_decay]
+
+random:
+  num_trials: 6                # same budget as the grid
+  seed: 0                      # sampling seed (the training seed is train.seed)
+  space:
+    # Covers the whole grid range plus some margin on each side.
+    learning_rate: {type: loguniform, low: 0.0005, high: 0.03}
+    weight_decay: {type: loguniform, low: 0.00005, high: 0.001}
+    label_smoothing: {type: choice, values: [0.0, 0.1, 0.2]}
+
+experiment: tuning             # MLflow experiment; each study is a parent run with one child run per trial
