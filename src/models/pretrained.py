@@ -72,3 +72,13 @@ def vgg16_pretrained(num_classes: int, pretrained: bool = True, freeze_backbone:
     _freeze(model, freeze_backbone)
     model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
     return model
+
+
+def alexnet_pretrained(num_classes: int, pretrained: bool = True, freeze_backbone: bool = False) -> nn.Module:
+    """AlexNet with ImageNet weights (IMAGENET1K_V1) and a new last layer (4096 -> num_classes)."""
+    check_num_classes(num_classes)
+    model = alexnet(weights=AlexNet_Weights.IMAGENET1K_V1 if pretrained else None)
+    _freeze(model, freeze_backbone)
+    model.classifier[6] = nn.Linear(model.classifier[6].in_features, num_classes)
+    return model
+
