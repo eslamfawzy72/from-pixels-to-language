@@ -1,0 +1,42 @@
+# The article approach ("Bird by Bird using Deep Learning"): pretrained ResNet-50, larger images and a random crop.
+#   python -m src.cli train --task classification --config configs/classification_article.yaml
+# Measure the crop alone with --set data.random_crop=false, and attention with
+# --set train.model_kwargs.use_attention=true.
+# Differences from the article: 40 epochs with early stopping (it trains 100), and images are shrunk
+# to fit 375 x 375 with a gentle crop (it pads to 500 and crops 375 x 375 at full size, which can cut the bird).
+
+train:
+  model_name: resnet50_article
+  num_classes: 200
+  model_kwargs: {}
+  epochs: 40
+  batch_size: 24
+  optimizer: adam
+  learning_rate: 0.0001
+  weight_decay: 0.0
+  scheduler: step              # step_size 1 + gamma 0.95: the article's exponential decay
+  step_size: 1
+  gamma: 0.95
+  warmup_epochs: 0
+  min_lr: 0.0
+  label_smoothing: 0.0
+  early_stopping_patience: 10
+  monitor: val_accuracy
+  seed: 42
+  device: auto
+
+data:
+  num_workers: 2
+  image_size: 375
+  random_crop: true            # training only; validation and test images are never cropped
+
+output:
+  dir: outputs/runs
+  run_name: null
+
+tracking:
+  enabled: true
+  experiment: classification
+  dir: outputs/mlflow
+  tracking_uri: null
+  log_checkpoints: false

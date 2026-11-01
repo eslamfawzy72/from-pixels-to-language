@@ -14,6 +14,7 @@ from .alexnet import AlexNet
 from .googlenet import GoogLeNet
 from .pretrained import alexnet_pretrained, resnet18_pretrained, resnet50_pretrained, vgg16_pretrained
 from .resnet import resnet18, resnet34, resnet50, resnet101, resnet152
+from .resnet_article import resnet50_article
 from .vgg import vgg16, vgg19
 
 _REGISTRY: dict[str, Callable[..., nn.Module]] = {
@@ -37,6 +38,7 @@ _PRETRAINED: dict[str, Callable[..., nn.Module]] = {
     "resnet50_pretrained": resnet50_pretrained,
     "vgg16_pretrained": vgg16_pretrained,
     "alexnet_pretrained": alexnet_pretrained,
+    "resnet50_article": resnet50_article,
 }
 
 

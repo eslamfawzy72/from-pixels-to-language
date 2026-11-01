@@ -176,7 +176,7 @@ During training, each time the `DataLoader` needs an image it calls `CUBClassifi
 
 ### `src/data/dataset.py`: the main entry point
 
-#### `get_dataloaders(batch_size=32, num_workers=2, image_size=224, split_path=SPLIT_PATH, seed=42)`
+#### `get_dataloaders(batch_size=32, num_workers=2, image_size=224, split_path=SPLIT_PATH, seed=42, random_crop=False)`
 
 Builds the train, validation and test DataLoaders. **This is the function you normally need.**
 
@@ -187,6 +187,7 @@ Builds the train, validation and test DataLoaders. **This is the function you no
 | `image_size` | `224` | Output size (square). For example `448` for a higher-resolution experiment. |
 | `split_path` | `data/splits/train_val_seed42.json` | Which saved split to use. |
 | `seed` | `42` | Seed for the training shuffle order (reproducible runs). |
+| `random_crop` | `False` | Training images only: replace the random zoom with a gentle random crop that keeps at least 70% of the image area. |
 
 **Returns:** `(train_loader, val_loader, test_loader)`
 
@@ -202,7 +203,7 @@ Each batch is `(images, labels)`: `images` is a float tensor `(batch_size, 3, im
 train_loader, val_loader, test_loader = get_dataloaders(batch_size=64, num_workers=4)
 ```
 
-#### `get_datasets(image_size=224, split_path=SPLIT_PATH)`
+#### `get_datasets(image_size=224, split_path=SPLIT_PATH, random_crop=False)`
 
 Same as above but returns the three **datasets** without DataLoaders. Useful to look at single images or to build your own DataLoader (for example a different sampler).
 
@@ -249,9 +250,9 @@ A PyTorch `Dataset`. You normally get it from `get_datasets()` instead of creati
 | `IMAGENET_STD` | `[0.229, 0.224, 0.225]` | Per-channel standard deviation used for normalization |
 | `PAD_COLOR` | `(124, 116, 104)` | Padding color: the ImageNet mean x 255, becomes 0 after normalization |
 
-#### `build_train_transform(image_size=224)`
+#### `build_train_transform(image_size=224, random_crop=False)`
 
-**Returns** the training transform: a callable that takes a PIL image and returns a normalized, **randomly augmented** tensor `(3, image_size, image_size)`. Every call gives a different result.
+**Returns** the training transform: a callable that takes a PIL image and returns a normalized, **randomly augmented** tensor `(3, image_size, image_size)`. Every call gives a different result. With `random_crop=True`, a gentle crop replaces the random zoom. It can cut part of the bird, so it is off by default.
 
 ```python
 train_tf = build_train_transform()
@@ -458,6 +459,8 @@ train_loader, val_loader, test_loader = get_dataloaders(batch_size=16, image_siz
 ```
 
 About 4x slower than 224. Lower the batch size if the GPU runs out of memory.
+
+`configs/classification_article.yaml` combines a larger size (375) with the random crop (`random_crop=True`), for the pretrained `resnet50_article`.
 
 ### Final model: train on train + validation
 

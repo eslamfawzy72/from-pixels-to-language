@@ -69,9 +69,9 @@ class TestPretrained(unittest.TestCase):
     """pretrained=False builds the same network without downloading the ImageNet weights."""
 
     FEATURES = {"resnet18_pretrained": 512, "resnet50_pretrained": 2048, "vgg16_pretrained": 4096,
-                "alexnet_pretrained": 4096}  # inputs of the last layer
+                "alexnet_pretrained": 4096, "resnet50_article": 2048}  # inputs of the last layer
     LAST_LAYER = {"resnet18_pretrained": "fc", "resnet50_pretrained": "fc", "vgg16_pretrained": "classifier.6",
-                  "alexnet_pretrained": "classifier.6"}
+                  "alexnet_pretrained": "classifier.6", "resnet50_article": "fc"}
 
     def test_registered_apart_from_the_scratch_models(self) -> None:
         self.assertEqual(pretrained_models(), list(self.FEATURES))
@@ -104,6 +104,36 @@ class TestPretrained(unittest.TestCase):
         for name in self.FEATURES:
             with self.subTest(model=name), self.assertRaises(ValueError):
                 create_model(name, num_classes=0, pretrained=False)
+
+
+class TestResNet50Article(unittest.TestCase):
+    """The attention variant of ``resnet50_article``."""
+
+    def setUp(self) -> None:
+        self.images, self.labels = dummy_batch()
+        self.model = create_model("resnet50_article", num_classes=NUM_CLASSES, pretrained=False, use_attention=True)
+
+    def test_output_shape(self) -> None:
+        with torch.no_grad():
+            output = self.model.eval()(self.images)
+        self.assertEqual(tuple(output.shape), (self.images.shape[0], NUM_CLASSES))
+
+    def test_attention_starts_as_a_no_op(self) -> None:
+        self.model.eval()
+        with torch.no_grad():
+            self.assertTrue(torch.equal(self.model(self.images), self.model.base(self.images)))
+
+    def test_attention_learns(self) -> None:
+        nn.functional.cross_entropy(self.model.train()(self.images), self.labels).backward()
+        self.assertGreater(self.model.att1.bn.weight.grad.abs().sum().item(), 0)
+
+    def test_checkpoint_round_trip(self) -> None:
+        kwargs = {"num_classes": NUM_CLASSES, "pretrained": False, "use_attention": True}
+        rebuilt = create_model("resnet50_article", **kwargs)
+        rebuilt.load_state_dict(self.model.state_dict())
+        self.model.eval(), rebuilt.eval()
+        with torch.no_grad():
+            self.assertTrue(torch.equal(self.model(self.images), rebuilt(self.images)))
 
 
 if __name__ == "__main__":
