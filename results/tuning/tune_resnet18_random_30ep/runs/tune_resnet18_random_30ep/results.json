@@ -1,0 +1,216 @@
+{
+  "method": "random",
+  "study": "tune_resnet18_random_30ep",
+  "monitor": "val_accuracy",
+  "num_trials": 6,
+  "base_config": {
+    "model_name": "resnet18",
+    "num_classes": 200,
+    "model_kwargs": {},
+    "epochs": 30,
+    "batch_size": 32,
+    "optimizer": "sgd",
+    "learning_rate": 0.05,
+    "momentum": 0.9,
+    "weight_decay": 0.0005,
+    "scheduler": "cosine",
+    "warmup_epochs": 1,
+    "min_lr": 0.0,
+    "label_smoothing": 0.1,
+    "early_stopping_patience": null,
+    "monitor": "val_accuracy",
+    "seed": 42,
+    "device": "auto"
+  },
+  "space": {
+    "learning_rate": {
+      "type": "loguniform",
+      "low": 0.003,
+      "high": 0.1
+    },
+    "weight_decay": {
+      "type": "loguniform",
+      "low": 0.0001,
+      "high": 0.005
+    },
+    "label_smoothing": {
+      "type": "choice",
+      "values": [
+        0.0,
+        0.1,
+        0.2
+      ]
+    }
+  },
+  "trials": [
+    {
+      "trial": "trial_00",
+      "params": {
+        "learning_rate": 0.058,
+        "weight_decay": 0.00194,
+        "label_smoothing": 0.1
+      },
+      "hyperparameters": {
+        "learning_rate": 0.058,
+        "weight_decay": 0.00194,
+        "label_smoothing": 0.1
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.3337041156840934,
+      "best_epoch": 29,
+      "epochs_run": 30,
+      "val_accuracy": 0.3337041156840934,
+      "val_loss": 2.741393062508809,
+      "train_accuracy": 0.4765272048713416,
+      "final_val_accuracy": 0.3325917686318131,
+      "stopped_early": false,
+      "seconds": 793.8478117469999,
+      "run_dir": "/kaggle/working/runs/tune_resnet18_random_30ep/trial_00"
+    },
+    {
+      "trial": "trial_01",
+      "params": {
+        "learning_rate": 0.00346,
+        "weight_decay": 0.00437,
+        "label_smoothing": 0.1
+      },
+      "hyperparameters": {
+        "learning_rate": 0.00346,
+        "weight_decay": 0.00437,
+        "label_smoothing": 0.1
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.1835372636262514,
+      "best_epoch": 30,
+      "epochs_run": 30,
+      "val_accuracy": 0.1835372636262514,
+      "val_loss": 3.5280504632447003,
+      "train_accuracy": 0.24965625613828324,
+      "final_val_accuracy": 0.1835372636262514,
+      "stopped_early": false,
+      "seconds": 767.202132592,
+      "run_dir": "/kaggle/working/runs/tune_resnet18_random_30ep/trial_01"
+    },
+    {
+      "trial": "trial_02",
+      "params": {
+        "learning_rate": 0.0124,
+        "weight_decay": 0.00215,
+        "label_smoothing": 0.1
+      },
+      "hyperparameters": {
+        "learning_rate": 0.0124,
+        "weight_decay": 0.00215,
+        "label_smoothing": 0.1
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.3114571746384872,
+      "best_epoch": 27,
+      "epochs_run": 30,
+      "val_accuracy": 0.3114571746384872,
+      "val_loss": 2.745282798906057,
+      "train_accuracy": 0.5052052641917109,
+      "final_val_accuracy": 0.3114571746384872,
+      "stopped_early": false,
+      "seconds": 766.4759742169997,
+      "run_dir": "/kaggle/working/runs/tune_resnet18_random_30ep/trial_02"
+    },
+    {
+      "trial": "trial_03",
+      "params": {
+        "learning_rate": 0.0893,
+        "weight_decay": 0.000406,
+        "label_smoothing": 0.0
+      },
+      "hyperparameters": {
+        "learning_rate": 0.0893,
+        "weight_decay": 0.000406,
+        "label_smoothing": 0.0
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.3170189098998888,
+      "best_epoch": 28,
+      "epochs_run": 30,
+      "val_accuracy": 0.3170189098998888,
+      "val_loss": 2.8802530973718747,
+      "train_accuracy": 0.5442938518955018,
+      "final_val_accuracy": 0.3014460511679644,
+      "stopped_early": false,
+      "seconds": 766.9836934099999,
+      "run_dir": "/kaggle/working/runs/tune_resnet18_random_30ep/trial_03"
+    },
+    {
+      "trial": "trial_04",
+      "params": {
+        "learning_rate": 0.0176,
+        "weight_decay": 0.000301,
+        "label_smoothing": 0.0
+      },
+      "hyperparameters": {
+        "learning_rate": 0.0176,
+        "weight_decay": 0.000301,
+        "label_smoothing": 0.0
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.3303670745272525,
+      "best_epoch": 27,
+      "epochs_run": 30,
+      "val_accuracy": 0.3303670745272525,
+      "val_loss": 2.8110465357645733,
+      "train_accuracy": 0.5291691219799647,
+      "final_val_accuracy": 0.3281423804226919,
+      "stopped_early": false,
+      "seconds": 765.2524536349997,
+      "run_dir": "/kaggle/working/runs/tune_resnet18_random_30ep/trial_04"
+    },
+    {
+      "trial": "trial_05",
+      "params": {
+        "learning_rate": 0.0262,
+        "weight_decay": 0.000266,
+        "label_smoothing": 0.2
+      },
+      "hyperparameters": {
+        "learning_rate": 0.0262,
+        "weight_decay": 0.000266,
+        "label_smoothing": 0.2
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.3236929922135706,
+      "best_epoch": 29,
+      "epochs_run": 30,
+      "val_accuracy": 0.3236929922135706,
+      "val_loss": 2.7769630904722797,
+      "train_accuracy": 0.6006678452170497,
+      "final_val_accuracy": 0.3136818687430478,
+      "stopped_early": false,
+      "seconds": 768.9368978530001,
+      "run_dir": "/kaggle/working/runs/tune_resnet18_random_30ep/trial_05"
+    }
+  ],
+  "best": {
+    "trial": "trial_00",
+    "params": {
+      "learning_rate": 0.058,
+      "weight_decay": 0.00194,
+      "label_smoothing": 0.1
+    },
+    "hyperparameters": {
+      "learning_rate": 0.058,
+      "weight_decay": 0.00194,
+      "label_smoothing": 0.1
+    },
+    "monitor": "val_accuracy",
+    "best_metric": 0.3337041156840934,
+    "best_epoch": 29,
+    "epochs_run": 30,
+    "val_accuracy": 0.3337041156840934,
+    "val_loss": 2.741393062508809,
+    "train_accuracy": 0.4765272048713416,
+    "final_val_accuracy": 0.3325917686318131,
+    "stopped_early": false,
+    "seconds": 793.8478117469999,
+    "run_dir": "/kaggle/working/runs/tune_resnet18_random_30ep/trial_00"
+  },
+  "total_seconds": 4628.698963454
+}
