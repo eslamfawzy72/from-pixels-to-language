@@ -27,7 +27,9 @@ random:
   num_trials: 6                # same budget as the grid
   seed: 0                      # sampling seed (the training seed is train.seed)
   space:
-    learning_rate: {type: loguniform, low: 0.01, high: 0.15}
+    # Extended down from 0.01-0.15: the grid's best learning_rate (0.02) was its lowest value and
+    # accuracy fell as lr rose, so the optimum is likely below 0.02. Still covers the whole grid range.
+    learning_rate: {type: loguniform, low: 0.003, high: 0.1}
     weight_decay: {type: loguniform, low: 0.0001, high: 0.005}
     label_smoothing: {type: choice, values: [0.0, 0.1, 0.2]}
 

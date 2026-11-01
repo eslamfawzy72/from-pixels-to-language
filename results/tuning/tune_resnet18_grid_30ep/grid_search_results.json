@@ -1,0 +1,219 @@
+{
+  "method": "grid",
+  "study": "tune_resnet18_grid_30ep",
+  "monitor": "val_accuracy",
+  "num_trials": 6,
+  "base_config": {
+    "model_name": "resnet18",
+    "num_classes": 200,
+    "model_kwargs": {},
+    "epochs": 30,
+    "batch_size": 32,
+    "optimizer": "sgd",
+    "learning_rate": 0.05,
+    "momentum": 0.9,
+    "weight_decay": 0.0005,
+    "scheduler": "cosine",
+    "warmup_epochs": 1,
+    "min_lr": 0.0,
+    "label_smoothing": 0.1,
+    "early_stopping_patience": null,
+    "monitor": "val_accuracy",
+    "seed": 42,
+    "device": "auto"
+  },
+  "space": {
+    "values": {
+      "learning_rate": [
+        0.02,
+        0.05,
+        0.1
+      ],
+      "weight_decay": [
+        0.0005,
+        0.002
+      ],
+      "label_smoothing": [
+        0.0,
+        0.1,
+        0.2
+      ]
+    },
+    "crossed": [
+      "learning_rate",
+      "weight_decay"
+    ]
+  },
+  "trials": [
+    {
+      "trial": "trial_00",
+      "params": {
+        "learning_rate": 0.02,
+        "weight_decay": 0.0005,
+        "label_smoothing": 0.0
+      },
+      "hyperparameters": {
+        "learning_rate": 0.02,
+        "weight_decay": 0.0005,
+        "label_smoothing": 0.0
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.327,
+      "best_epoch": 28,
+      "epochs_run": 30,
+      "val_accuracy": 0.327,
+      "val_loss": 2.774,
+      "train_accuracy": 0.602,
+      "final_val_accuracy": 0.325,
+      "stopped_early": false,
+      "seconds": 957.1,
+      "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet18_grid_30ep/trial_00"
+    },
+    {
+      "trial": "trial_01",
+      "params": {
+        "learning_rate": 0.02,
+        "weight_decay": 0.002,
+        "label_smoothing": 0.1
+      },
+      "hyperparameters": {
+        "learning_rate": 0.02,
+        "weight_decay": 0.002,
+        "label_smoothing": 0.1
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.3448,
+      "best_epoch": 30,
+      "epochs_run": 30,
+      "val_accuracy": 0.3448,
+      "val_loss": 2.651,
+      "train_accuracy": 0.587,
+      "final_val_accuracy": 0.3448,
+      "stopped_early": false,
+      "seconds": 931.4,
+      "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet18_grid_30ep/trial_01"
+    },
+    {
+      "trial": "trial_02",
+      "params": {
+        "learning_rate": 0.05,
+        "weight_decay": 0.0005,
+        "label_smoothing": 0.1
+      },
+      "hyperparameters": {
+        "learning_rate": 0.05,
+        "weight_decay": 0.0005,
+        "label_smoothing": 0.1
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.3192,
+      "best_epoch": 30,
+      "epochs_run": 30,
+      "val_accuracy": 0.3192,
+      "val_loss": 2.731,
+      "train_accuracy": 0.586,
+      "final_val_accuracy": 0.3192,
+      "stopped_early": false,
+      "seconds": 933.5,
+      "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet18_grid_30ep/trial_02"
+    },
+    {
+      "trial": "trial_03",
+      "params": {
+        "learning_rate": 0.05,
+        "weight_decay": 0.002,
+        "label_smoothing": 0.2
+      },
+      "hyperparameters": {
+        "learning_rate": 0.05,
+        "weight_decay": 0.002,
+        "label_smoothing": 0.2
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.317,
+      "best_epoch": 30,
+      "epochs_run": 30,
+      "val_accuracy": 0.317,
+      "val_loss": 2.865,
+      "train_accuracy": 0.477,
+      "final_val_accuracy": 0.317,
+      "stopped_early": false,
+      "seconds": 988.0,
+      "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet18_grid_30ep/trial_03"
+    },
+    {
+      "trial": "trial_04",
+      "params": {
+        "learning_rate": 0.1,
+        "weight_decay": 0.0005,
+        "label_smoothing": 0.2
+      },
+      "hyperparameters": {
+        "learning_rate": 0.1,
+        "weight_decay": 0.0005,
+        "label_smoothing": 0.2
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.3315,
+      "best_epoch": 30,
+      "epochs_run": 30,
+      "val_accuracy": 0.3315,
+      "val_loss": 2.771,
+      "train_accuracy": 0.574,
+      "final_val_accuracy": 0.3315,
+      "stopped_early": false,
+      "seconds": 940.7,
+      "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet18_grid_30ep/trial_04"
+    },
+    {
+      "trial": "trial_05",
+      "params": {
+        "learning_rate": 0.1,
+        "weight_decay": 0.002,
+        "label_smoothing": 0.0
+      },
+      "hyperparameters": {
+        "learning_rate": 0.1,
+        "weight_decay": 0.002,
+        "label_smoothing": 0.0
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.2558,
+      "best_epoch": 30,
+      "epochs_run": 30,
+      "val_accuracy": 0.2558,
+      "val_loss": 2.998,
+      "train_accuracy": 0.364,
+      "final_val_accuracy": 0.2558,
+      "stopped_early": false,
+      "seconds": 931.4,
+      "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet18_grid_30ep/trial_05"
+    }
+  ],
+  "best": {
+    "trial": "trial_01",
+    "params": {
+      "learning_rate": 0.02,
+      "weight_decay": 0.002,
+      "label_smoothing": 0.1
+    },
+    "hyperparameters": {
+      "learning_rate": 0.02,
+      "weight_decay": 0.002,
+      "label_smoothing": 0.1
+    },
+    "monitor": "val_accuracy",
+    "best_metric": 0.3448,
+    "best_epoch": 30,
+    "epochs_run": 30,
+    "val_accuracy": 0.3448,
+    "val_loss": 2.651,
+    "train_accuracy": 0.587,
+    "final_val_accuracy": 0.3448,
+    "stopped_early": false,
+    "seconds": 931.4,
+    "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet18_grid_30ep/trial_01"
+  },
+  "total_seconds": 5682.1,
+  "note": "Rebuilt from the training log (the run's files were lost); values rounded as printed."
+}
