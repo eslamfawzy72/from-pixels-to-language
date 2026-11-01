@@ -68,8 +68,10 @@ class TestFactory(unittest.TestCase):
 class TestPretrained(unittest.TestCase):
     """pretrained=False builds the same network without downloading the ImageNet weights."""
 
-    FEATURES = {"resnet18_pretrained": 512, "resnet50_pretrained": 2048, "vgg16_pretrained": 4096}  # inputs of the last layer
-    LAST_LAYER = {"resnet18_pretrained": "fc", "resnet50_pretrained": "fc", "vgg16_pretrained": "classifier.6"}
+    FEATURES = {"resnet18_pretrained": 512, "resnet50_pretrained": 2048, "vgg16_pretrained": 4096,
+                "alexnet_pretrained": 4096}  # inputs of the last layer
+    LAST_LAYER = {"resnet18_pretrained": "fc", "resnet50_pretrained": "fc", "vgg16_pretrained": "classifier.6",
+                  "alexnet_pretrained": "classifier.6"}
 
     def test_registered_apart_from_the_scratch_models(self) -> None:
         self.assertEqual(pretrained_models(), list(self.FEATURES))

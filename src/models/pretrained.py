@@ -10,12 +10,15 @@ Two models, so the comparison with the from-scratch ResNet-18 is fair:
 And VGG-16 (torchvision's, same architecture as our from-scratch vgg16 without batch norm), whose
 last layer is ``classifier[6]`` instead of ``fc``:
     vgg16_pretrained: compared with the from-scratch VGG-16 (the effect of pretraining on VGG)
+And AlexNet (torchvision's, also with ``classifier[6]`` as its last layer):
+    alexnet_pretrained: compared with the from-scratch AlexNet (the effect of pretraining on AlexNet)
 """
 
 from __future__ import annotations
 
 from torch import nn
-from torchvision.models import ResNet18_Weights, ResNet50_Weights, VGG16_Weights, resnet18, resnet50, vgg16
+from torchvision.models import (AlexNet_Weights, ResNet18_Weights, ResNet50_Weights, VGG16_Weights, alexnet, resnet18,
+                                resnet50, vgg16)
 
 from .blocks import check_num_classes
 

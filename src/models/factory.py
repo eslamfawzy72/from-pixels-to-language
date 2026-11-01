@@ -12,7 +12,7 @@ from torch import nn
 
 from .alexnet import AlexNet
 from .googlenet import GoogLeNet
-from .pretrained import resnet18_pretrained, resnet50_pretrained, vgg16_pretrained
+from .pretrained import alexnet_pretrained, resnet18_pretrained, resnet50_pretrained, vgg16_pretrained
 from .resnet import resnet18, resnet34, resnet50, resnet101, resnet152
 from .vgg import vgg16, vgg19
 
@@ -36,6 +36,7 @@ _PRETRAINED: dict[str, Callable[..., nn.Module]] = {
     "resnet18_pretrained": resnet18_pretrained,
     "resnet50_pretrained": resnet50_pretrained,
     "vgg16_pretrained": vgg16_pretrained,
+    "alexnet_pretrained": alexnet_pretrained,
 }
 
 

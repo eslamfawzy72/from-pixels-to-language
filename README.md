@@ -250,6 +250,7 @@ Two torchvision models with ImageNet weights (`IMAGENET1K_V1`, the original rele
 | `resnet18_pretrained` | from-scratch `resnet18` (same architecture, same 11.3M parameters) | the effect of pretraining alone |
 | `resnet50_pretrained` | `resnet18_pretrained` (both pretrained) and published CUB results | the effect of a bigger model; benchmarking |
 | `vgg16_pretrained` | from-scratch `vgg16` (same architecture, 134M parameters) | the effect of pretraining on VGG (fine-tune with `--set train.learning_rate=0.001`) |
+| `alexnet_pretrained` | from-scratch `alexnet` (same 57.8M parameters) | the effect of pretraining on AlexNet (fine-tune with `--set train.learning_rate=0.001`) |
 
 ```bash
 # Fine-tune every layer (20 epochs, lr 0.01, weight decay 1e-4; see the YAML for why)
