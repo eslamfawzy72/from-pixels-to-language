@@ -1,0 +1,34 @@
+# AlexNet search settings for:
+#   python -m src.cli tune --task classification --method grid|random --space configs/tuning_alexnet.yaml
+# Same rules as configs/tuning.yaml: `trial` is applied on top of --config, then the tuned values;
+# trials are ranked on the validation split and the test split is never used.
+
+trial:                         # same seed, same data, only the tuned values differ
+  model_name: alexnet
+  # 12-epoch trials are too short here: the AlexNet baseline (lr 0.01) only had 5.9% val accuracy at
+  # epoch 12, and its train/val gap (the effect of regularization) only opens from about epoch 20.
+  epochs: 30
+  warmup_epochs: 3             # same as the full run; there is no batch norm to steady the first epochs
+  early_stopping_patience: null
+  monitor: val_accuracy        # trials are ranked by validation accuracy only
+
+grid:
+  # Centred on the baseline's 0.01. ResNet-18's values (0.02-0.1) rely on batch norm, which AlexNet does not have.
+  learning_rate: [0.003, 0.01, 0.03]
+  weight_decay: [0.0005, 0.002]
+  label_smoothing: [0.0, 0.1, 0.2]
+# Fractional grid: 3 x 2 = 6 trials, not 3 x 2 x 3 = 18; label_smoothing is rotated so each value is used twice:
+#   lr 0.003: wd 5e-4 -> ls 0.0, wd 2e-3 -> ls 0.1
+#   lr 0.01 : wd 5e-4 -> ls 0.1, wd 2e-3 -> ls 0.2     (the first is the baseline's setting, at 30 epochs)
+#   lr 0.03 : wd 5e-4 -> ls 0.2, wd 2e-3 -> ls 0.0
+grid_crossed: [learning_rate, weight_decay]
+
+random:
+  num_trials: 6                # same budget as the grid
+  seed: 0                      # sampling seed (the training seed is train.seed)
+  space:
+    learning_rate: {type: loguniform, low: 0.002, high: 0.04}    # covers the whole grid range
+    weight_decay: {type: loguniform, low: 0.0001, high: 0.005}
+    label_smoothing: {type: choice, values: [0.0, 0.1, 0.2]}
+
+experiment: tuning             # MLflow experiment; each study is a parent run with one child run per trial

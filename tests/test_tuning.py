@@ -9,7 +9,10 @@ from __future__ import annotations
 import json
 import shutil
 import tempfile
+import types
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -206,6 +209,50 @@ class TestTuneCli(unittest.TestCase):
         base = cli.load_settings(REPO_TUNING.with_name("classification.yaml"))["train"]
         for params in grid + random_a:
             TrainConfig.from_dict({**base, **tuning["trial"], **params})
+
+    def test_repo_alexnet_tuning_config(self) -> None:
+        path = REPO_TUNING.with_name("tuning_alexnet.yaml")
+        tuning = cli.load_settings(path)
+        grid, _ = cli.build_trials("grid", tuning)
+        random_a, _ = cli.build_trials("random", tuning)
+        self.assertEqual(len(grid), 6)
+        self.assertEqual(len({tuple(t.values()) for t in grid}), 6)
+        self.assertEqual(len(random_a), 6)
+        tuned = {"learning_rate", "weight_decay", "label_smoothing"}
+        self.assertTrue(all(set(t) == tuned for t in grid + random_a))
+        # the AlexNet baseline's setting is one of the grid trials
+        self.assertIn({"learning_rate": 0.01, "weight_decay": 0.0005, "label_smoothing": 0.1}, grid)
+        low, high = (tuning["random"]["space"]["learning_rate"][key] for key in ("low", "high"))
+        self.assertTrue(all(low <= t["learning_rate"] <= high for t in grid + random_a))
+        base = cli.load_settings(REPO_TUNING.with_name("classification.yaml"))["train"]
+        for params in grid + random_a:
+            config = TrainConfig.from_dict({**base, **tuning["trial"], **params})
+            self.assertEqual(config.model_name, "alexnet")
+            self.assertEqual(config.monitor, "val_accuracy")
+            self.assertEqual(config.epochs, 30)
+
+    def test_tune_uses_model_from_space_file(self) -> None:
+        # The task module is replaced, so this checks the settings passed to it without training.
+        calls = []
+
+        def fake_tune(base, trials, study_dir, method, **kwargs):
+            calls.append((base, trials, Path(study_dir), method))
+            return {"best": {"params": trials[0]}}
+
+        fake_task = types.ModuleType("src.tasks.classification")
+        fake_task.tune_classification = fake_tune
+        space = str(REPO_TUNING.with_name("tuning_alexnet.yaml"))
+        config = str(REPO_TUNING.with_name("classification.yaml"))
+        output = StringIO()
+        with swapped_modules({"src.tasks.classification": fake_task}), redirect_stdout(output):
+            cli.main(["tune", "--task", "classification", "--method", "grid", "--config", config, "--space", space])
+            cli.main(["tune", "--task", "classification", "--method", "random", "--config", config, "--space", space,
+                      "--model", "resnet18"])
+        base, trials, study_dir, method = calls[0]
+        self.assertEqual((base["model_name"], base["epochs"], base["warmup_epochs"]), ("alexnet", 30, 3))
+        self.assertEqual((study_dir.name, method, len(trials)), ("tune_alexnet_grid", "grid", 6))
+        self.assertIn("--model alexnet --run-name alexnet_tuned", output.getvalue())
+        self.assertEqual(calls[1][2].name, "tune_resnet18_random")  # --model still wins over the space file
 
     def test_printed_override_parses_back(self) -> None:
         for value in (0.05, 1e-05, 0.000123, 3, 0.0):

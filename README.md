@@ -157,6 +157,7 @@ src/tasks/
 src/cli.py           # command line interface
 configs/classification.yaml  # default classification settings
 configs/tuning.yaml          # search spaces and trial settings for `tune`
+configs/tuning_alexnet.yaml  # the same for AlexNet (pass with --space)
 ```
 
 ### Command line interface
@@ -239,6 +240,24 @@ python -m src.cli tune --task classification --method grid \
     --output-dir /content/drive/MyDrive/from-pixels-to-language/runs \
     --tracking-dir /content/drive/MyDrive/from-pixels-to-language/mlflow
 # same with --method random, then compare-tuning on the two Drive study folders
+```
+
+#### AlexNet
+
+[configs/tuning_alexnet.yaml](configs/tuning_alexnet.yaml) is the same search for the from-scratch AlexNet; pass it with `--space` (it also selects the model).
+
+| | Grid search | Random search |
+|---|---|---|
+| Values | `learning_rate` {0.003, 0.01, 0.03}, `weight_decay` {5e-4, 2e-3}, `label_smoothing` {0, 0.1, 0.2} | `learning_rate` log-uniform [0.002, 0.04], `weight_decay` log-uniform [1e-4, 5e-3], `label_smoothing` ∈ {0, 0.1, 0.2} |
+| Trials | 6 (fractional grid; includes the baseline's setting) | 6 (sampled with `random.seed: 0`) |
+
+Each trial runs 30 epochs with 3 warm-up epochs, because the AlexNet baseline had only 5.9% validation accuracy at epoch 12 and its train/validation gap only opens from about epoch 20. The learning rates are lower than ResNet-18's because AlexNet has no batch norm. At the baseline's roughly 72 s per epoch, a study takes up to about 3.6 hours (6 × 30 × 72 s); it can be resumed if Colab disconnects.
+
+```bash
+python -m src.cli tune --task classification --method grid --space configs/tuning_alexnet.yaml \
+    --output-dir /content/drive/MyDrive/from-pixels-to-language/runs \
+    --tracking-dir /content/drive/MyDrive/from-pixels-to-language/mlflow
+# same with --method random, then compare-tuning on tune_alexnet_grid and tune_alexnet_random
 ```
 
 ### Transfer learning (pretrained ResNet-18 and ResNet-50)
