@@ -27,6 +27,7 @@ def train_classification(
     num_workers: int = 2,
     image_size: int = 224,
     tracker: Optional[MLflowTracker] = None,
+    random_crop: bool = False,
 ) -> dict[str, Any]:
     """Train ``config.model_name`` on CUB and return the result of :func:`fit`.
 
@@ -39,15 +40,16 @@ def train_classification(
     model = create_model(config.model_name, num_classes=config.num_classes, **config.model_kwargs)
     total_params, trainable_params = count_parameters(model)
     train_loader, val_loader, _ = get_dataloaders(batch_size=config.batch_size, num_workers=num_workers,
-                                                  image_size=image_size, seed=config.seed)
+                                                  image_size=image_size, seed=config.seed, random_crop=random_crop)
     class_names = list(get_class_names())
     if len(class_names) != config.num_classes:
         raise ValueError(f"num_classes={config.num_classes} but the dataset has {len(class_names)} classes")
 
-    extra = {"class_names": class_names, "image_size": image_size,
+    extra = {"class_names": class_names, "image_size": image_size, "random_crop": random_crop,
              "total_params": total_params, "trainable_params": trainable_params}
     if tracker is not None:
-        tracker.log_params({**config.to_dict(), "image_size": image_size, "num_workers": num_workers,
+        tracker.log_params({**config.to_dict(), "image_size": image_size, "random_crop": random_crop,
+                            "num_workers": num_workers,
                             "total_params": total_params, "trainable_params": trainable_params,
                             "train_images": len(train_loader.dataset), "val_images": len(val_loader.dataset)})
         extra["mlflow_run_id"] = tracker.run_id
@@ -80,6 +82,7 @@ def tune_classification(
     num_workers: int = 2,
     image_size: int = 224,
     tracking: Optional[dict[str, Any]] = None,
+    random_crop: bool = False,
 ) -> dict[str, Any]:
     """Run a grid or random search: one :func:`train_classification` run per trial.
 
@@ -93,7 +96,8 @@ def tune_classification(
     study_dir = Path(study_dir)
     if tracking is None:
         def train_untracked(config: TrainConfig, run_dir: Path, run_name: str) -> dict[str, Any]:
-            return train_classification(config, run_dir, num_workers=num_workers, image_size=image_size)
+            return train_classification(config, run_dir, num_workers=num_workers, image_size=image_size,
+                                        random_crop=random_crop)
 
         return run_study(base, trials, study_dir, method, train_untracked, space=space)
 
@@ -101,7 +105,8 @@ def tune_classification(
     location = {"tracking_dir": tracking.get("dir", "outputs/mlflow"), "tracking_uri": tracking.get("tracking_uri")}
     tags = {"task": "classification", "model": base["model_name"], "method": method, "study": study_dir.name}
     with MLflowTracker(experiment, run_name=study_dir.name, tags={**tags, "role": "study"}, **location) as parent:
-        parent.log_params({"method": method, "num_trials": len(trials), "image_size": image_size, **base})
+        parent.log_params({"method": method, "num_trials": len(trials), "image_size": image_size,
+                           "random_crop": random_crop, **base})
         parent.set_tags({"search_space": json.dumps(space), "study_dir": study_dir.resolve()})
 
         def train_tracked(config: TrainConfig, run_dir: Path, run_name: str) -> dict[str, Any]:
@@ -109,7 +114,7 @@ def tune_classification(
                                log_checkpoints=tracking.get("log_checkpoints", False),
                                tags={**tags, "role": "trial", "trial": run_dir.name}, **location) as tracker:
                 return train_classification(config, run_dir, num_workers=num_workers, image_size=image_size,
-                                            tracker=tracker)
+                                            tracker=tracker, random_crop=random_crop)
 
         def log_trial(record: dict[str, Any]) -> None:
             step = int(record["trial"].rsplit("_", 1)[1])

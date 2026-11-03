@@ -8,6 +8,7 @@ from PIL import Image
 from torchvision.transforms import v2 as T
 
 IMAGE_SIZE = 224
+CROP_MIN_AREA = 0.7  # the optional random crop keeps at least this fraction of the image
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
@@ -48,18 +49,21 @@ def to_tensor():
     ])
 
 
-def build_train_transform(image_size=IMAGE_SIZE):
+def build_train_transform(image_size=IMAGE_SIZE, random_crop=False):
     """Training images: random color change -> letterbox -> random flip/rotation/shift/zoom -> tensor.
 
     Color changes happen before the letterbox so the padding keeps exactly the mean color.
-    No hue change (color identifies species), no vertical flip, no random crop (it can cut the bird).
+    No hue change (color identifies species), no vertical flip. By default no random crop (it can cut
+    the bird); random_crop=True replaces the zoom with a gentle crop that keeps most of the image.
     """
+    crop = [T.RandomResizedCrop(image_size, scale=(CROP_MIN_AREA, 1.0), ratio=(0.9, 1.1), antialias=True)]
     return T.Compose([
         ToRGB(),
         T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.1),
         Letterbox(image_size),
         T.RandomHorizontalFlip(p=0.5),
-        T.RandomAffine(degrees=15, translate=(0.05, 0.05), scale=(0.9, 1.1), fill=PAD_COLOR),
+        *(crop if random_crop else []),
+        T.RandomAffine(degrees=15, translate=(0.05, 0.05), scale=None if random_crop else (0.9, 1.1), fill=PAD_COLOR),
         to_tensor(),
     ])
 

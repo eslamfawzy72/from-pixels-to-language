@@ -270,6 +270,7 @@ Two torchvision models with ImageNet weights (`IMAGENET1K_V1`, the original rele
 | `resnet50_pretrained` | `resnet18_pretrained` (both pretrained) and published CUB results | the effect of a bigger model; benchmarking |
 | `vgg16_pretrained` | from-scratch `vgg16` (same architecture, 134M parameters) | the effect of pretraining on VGG (fine-tune with `--set train.learning_rate=0.001`) |
 | `alexnet_pretrained` | from-scratch `alexnet` (same 57.8M parameters) | the effect of pretraining on AlexNet (fine-tune with `--set train.learning_rate=0.001`) |
+| `resnet50_article` | `resnet50_pretrained` (same network unless `--set train.model_kwargs.use_attention=true`) | the article approach ("Bird by Bird using Deep Learning"), with optional attention blocks |
 
 ```bash
 # Fine-tune every layer (20 epochs, lr 0.01, weight decay 1e-4; see the YAML for why)

@@ -35,21 +35,21 @@ class CUBClassificationDataset(Dataset):
         return image, sample["label"]
 
 
-def get_datasets(image_size=IMAGE_SIZE, split_path=SPLIT_PATH):
+def get_datasets(image_size=IMAGE_SIZE, split_path=SPLIT_PATH, random_crop=False):
     """Train (augmented), validation and test datasets built from the saved split."""
     train_dataset, test_dataset = load_cub_dataset()
     split = load_split(split_path)
 
-    train_set = CUBClassificationDataset(train_dataset, split["train"], build_train_transform(image_size))
+    train_set = CUBClassificationDataset(train_dataset, split["train"], build_train_transform(image_size, random_crop))
     val_set = CUBClassificationDataset(train_dataset, split["val"], build_eval_transform(image_size))
     test_set = CUBClassificationDataset(test_dataset, range(len(test_dataset)), build_eval_transform(image_size))
     return train_set, val_set, test_set
 
 
 def get_dataloaders(batch_size=32, num_workers=2, image_size=IMAGE_SIZE,
-                    split_path=SPLIT_PATH, seed=SEED):
+                    split_path=SPLIT_PATH, seed=SEED, random_crop=False):
     """Train / validation / test DataLoaders. Only the training loader is shuffled."""
-    train_set, val_set, test_set = get_datasets(image_size, split_path)
+    train_set, val_set, test_set = get_datasets(image_size, split_path, random_crop)
 
     common = {
         "batch_size": batch_size,
