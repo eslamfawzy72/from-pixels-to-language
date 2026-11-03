@@ -1,0 +1,219 @@
+{
+  "method": "grid",
+  "study": "tune_resnet50_article_grid",
+  "monitor": "val_accuracy",
+  "num_trials": 6,
+  "base_config": {
+    "model_name": "resnet50_article",
+    "num_classes": 200,
+    "model_kwargs": {},
+    "epochs": 15,
+    "batch_size": 24,
+    "optimizer": "adam",
+    "learning_rate": 0.0001,
+    "weight_decay": 0.0,
+    "scheduler": "step",
+    "step_size": 1,
+    "gamma": 0.95,
+    "warmup_epochs": 0,
+    "min_lr": 0.0,
+    "label_smoothing": 0.0,
+    "early_stopping_patience": null,
+    "monitor": "val_accuracy",
+    "seed": 42,
+    "device": "auto"
+  },
+  "space": {
+    "values": {
+      "learning_rate": [
+        5e-05,
+        0.0001,
+        0.0002
+      ],
+      "weight_decay": [
+        0.0,
+        0.0001
+      ],
+      "label_smoothing": [
+        0.1,
+        0.0,
+        0.2
+      ]
+    },
+    "crossed": [
+      "learning_rate",
+      "weight_decay"
+    ]
+  },
+  "trials": [
+    {
+      "trial": "trial_00",
+      "params": {
+        "learning_rate": 5e-05,
+        "weight_decay": 0.0,
+        "label_smoothing": 0.1
+      },
+      "hyperparameters": {
+        "learning_rate": 5e-05,
+        "weight_decay": 0.0,
+        "label_smoothing": 0.1
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.7897664071190211,
+      "best_epoch": 13,
+      "epochs_run": 15,
+      "val_accuracy": 0.7897664071190211,
+      "val_loss": 1.004073381026144,
+      "train_accuracy": 0.9709290905519544,
+      "final_val_accuracy": 0.7764182424916574,
+      "stopped_early": false,
+      "seconds": 2666.6638557549995,
+      "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet50_article_grid/trial_00"
+    },
+    {
+      "trial": "trial_01",
+      "params": {
+        "learning_rate": 5e-05,
+        "weight_decay": 0.0001,
+        "label_smoothing": 0.0
+      },
+      "hyperparameters": {
+        "learning_rate": 5e-05,
+        "weight_decay": 0.0001,
+        "label_smoothing": 0.0
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.7686318131256952,
+      "best_epoch": 13,
+      "epochs_run": 15,
+      "val_accuracy": 0.7686318131256952,
+      "val_loss": 0.9227179510309645,
+      "train_accuracy": 0.9648399135729719,
+      "final_val_accuracy": 0.7675194660734149,
+      "stopped_early": false,
+      "seconds": 2658.5630815160002,
+      "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet50_article_grid/trial_01"
+    },
+    {
+      "trial": "trial_02",
+      "params": {
+        "learning_rate": 0.0001,
+        "weight_decay": 0.0,
+        "label_smoothing": 0.0
+      },
+      "hyperparameters": {
+        "learning_rate": 0.0001,
+        "weight_decay": 0.0,
+        "label_smoothing": 0.0
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.7753058954393771,
+      "best_epoch": 13,
+      "epochs_run": 15,
+      "val_accuracy": 0.7753058954393771,
+      "val_loss": 0.8945381701721896,
+      "train_accuracy": 0.9858573954036535,
+      "final_val_accuracy": 0.764182424916574,
+      "stopped_early": false,
+      "seconds": 2649.688818177001,
+      "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet50_article_grid/trial_02"
+    },
+    {
+      "trial": "trial_03",
+      "params": {
+        "learning_rate": 0.0001,
+        "weight_decay": 0.0001,
+        "label_smoothing": 0.2
+      },
+      "hyperparameters": {
+        "learning_rate": 0.0001,
+        "weight_decay": 0.0001,
+        "label_smoothing": 0.2
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.7897664071190211,
+      "best_epoch": 15,
+      "epochs_run": 15,
+      "val_accuracy": 0.7897664071190211,
+      "val_loss": 1.164522455253113,
+      "train_accuracy": 0.9929286977018268,
+      "final_val_accuracy": 0.7897664071190211,
+      "stopped_early": false,
+      "seconds": 2650.5401877470013,
+      "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet50_article_grid/trial_03"
+    },
+    {
+      "trial": "trial_04",
+      "params": {
+        "learning_rate": 0.0002,
+        "weight_decay": 0.0,
+        "label_smoothing": 0.2
+      },
+      "hyperparameters": {
+        "learning_rate": 0.0002,
+        "weight_decay": 0.0,
+        "label_smoothing": 0.2
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.7652947719688543,
+      "best_epoch": 15,
+      "epochs_run": 15,
+      "val_accuracy": 0.7652947719688543,
+      "val_loss": 1.2146241777598261,
+      "train_accuracy": 0.9901787468080927,
+      "final_val_accuracy": 0.7652947719688543,
+      "stopped_early": false,
+      "seconds": 2647.7144676909993,
+      "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet50_article_grid/trial_04"
+    },
+    {
+      "trial": "trial_05",
+      "params": {
+        "learning_rate": 0.0002,
+        "weight_decay": 0.0001,
+        "label_smoothing": 0.1
+      },
+      "hyperparameters": {
+        "learning_rate": 0.0002,
+        "weight_decay": 0.0001,
+        "label_smoothing": 0.1
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.7619577308120133,
+      "best_epoch": 13,
+      "epochs_run": 15,
+      "val_accuracy": 0.7619577308120133,
+      "val_loss": 1.074463220074922,
+      "train_accuracy": 0.9815360439992143,
+      "final_val_accuracy": 0.7441601779755284,
+      "stopped_early": false,
+      "seconds": 2645.9990291219983,
+      "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet50_article_grid/trial_05"
+    }
+  ],
+  "best": {
+    "trial": "trial_00",
+    "params": {
+      "learning_rate": 5e-05,
+      "weight_decay": 0.0,
+      "label_smoothing": 0.1
+    },
+    "hyperparameters": {
+      "learning_rate": 5e-05,
+      "weight_decay": 0.0,
+      "label_smoothing": 0.1
+    },
+    "monitor": "val_accuracy",
+    "best_metric": 0.7897664071190211,
+    "best_epoch": 13,
+    "epochs_run": 15,
+    "val_accuracy": 0.7897664071190211,
+    "val_loss": 1.004073381026144,
+    "train_accuracy": 0.9709290905519544,
+    "final_val_accuracy": 0.7764182424916574,
+    "stopped_early": false,
+    "seconds": 2666.6638557549995,
+    "run_dir": "/content/drive/MyDrive/from-pixels-to-language/runs/tune_resnet50_article_grid/trial_00"
+  },
+  "total_seconds": 15919.169440008
+}
