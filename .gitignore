@@ -38,6 +38,7 @@ mlruns/
 mlflow.db
 outputs/runs/
 outputs/mlflow/
+outputs/eda/
 wandb/
 lightning_logs/
 tensorboard/
