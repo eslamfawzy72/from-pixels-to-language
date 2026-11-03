@@ -9,6 +9,7 @@ is already marked. They are not comparable with models that see the full image.
 
     python -m src.data.background    # checks every image against its mask and saves examples
 """
+import shutil
 import tarfile
 import urllib.request
 from pathlib import Path
@@ -43,6 +44,24 @@ def extract_masks(archive_path, masks_dir):
         archive.extractall(root, members=members, **options)
 
 
+def download_archive(archive_path, attempts=5):
+    """Download the mask archive. A dropped connection can end the file early, so its size is checked."""
+    # The Caltech site refuses Python's default User-Agent.
+    request = urllib.request.Request(MASKS_URL, headers={"User-Agent": "from-pixels-to-language"})
+    for attempt in range(1, attempts + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=300) as response, open(archive_path, "wb") as archive:
+                shutil.copyfileobj(response, archive)
+                expected = int(response.headers.get("Content-Length", -1))
+            size = Path(archive_path).stat().st_size
+            if expected in (-1, size):
+                return
+            print(f"Download attempt {attempt}: received {size} of {expected} bytes")
+        except OSError as error:  # includes URLError and timeouts
+            print(f"Download attempt {attempt}: {error}")
+    raise RuntimeError(f"Could not download the masks from {MASKS_URL} after {attempts} attempts")
+
+
 def find_masks(masks_dir=MASKS_DIR):
     """Return {image name without extension: mask path}, downloading the masks the first time."""
     masks_dir = Path(masks_dir)
@@ -53,7 +72,7 @@ def find_masks(masks_dir=MASKS_DIR):
     masks_dir.mkdir(parents=True, exist_ok=True)
     archive_path = masks_dir / "segmentations.tgz"
     print(f"Downloading the CUB masks (~40 MB) to {masks_dir}")
-    urllib.request.urlretrieve(MASKS_URL, archive_path)
+    download_archive(archive_path)
     extract_masks(archive_path, masks_dir)
     archive_path.unlink()
 

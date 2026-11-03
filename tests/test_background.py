@@ -17,7 +17,7 @@ from PIL import Image
 
 from src import cli
 from src.data.background import (BOX_MARGIN, BackgroundRemovedDataset, build_eval_steps, build_train_steps,
-                                 check_dataset, extract_masks, find_masks, remove_background)
+                                 check_dataset, download_archive, extract_masks, find_masks, remove_background)
 from src.data.transforms import IMAGE_SIZE, PAD_COLOR
 from tests.test_cli import IMAGE_SIZE as FAKE_IMAGE_SIZE, fake_data_modules, swapped_modules, write_config
 
@@ -148,10 +148,40 @@ class TestMaskFiles(unittest.TestCase):
 
     def test_complete_folder_is_not_downloaded_again(self) -> None:
         with tempfile.TemporaryDirectory() as tmp, mock.patch("src.data.background.NUM_MASKS", 1), \
-                mock.patch("urllib.request.urlretrieve") as download:
+                mock.patch("urllib.request.urlopen") as download:
             (Path(tmp) / "bird.png").write_bytes(b"mask")
             self.assertEqual(set(find_masks(tmp)), {"bird"})
             download.assert_not_called()
+
+    def test_download_names_the_client_and_unpacks(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, mock.patch("src.data.background.NUM_MASKS", 1), \
+                mock.patch("urllib.request.urlopen") as download:
+            archive_path = Path(tmp) / "source.tgz"
+            self.archive(archive_path, "segmentations/species/bird.png")
+            response = io.BytesIO(archive_path.read_bytes())
+            response.headers = {"Content-Length": str(archive_path.stat().st_size)}
+            download.return_value = response
+            masks_dir = Path(tmp) / "masks"
+            self.assertEqual(set(find_masks(masks_dir)), {"bird"})
+            self.assertEqual(download.call_args.args[0].get_header("User-agent"), "from-pixels-to-language")
+            self.assertFalse((masks_dir / "segmentations.tgz").exists())
+
+    def test_short_download_is_retried(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, mock.patch("urllib.request.urlopen") as download, \
+                mock.patch("builtins.print"):
+            short = io.BytesIO(b"ma")
+            short.headers = {"Content-Length": "4"}
+            full = io.BytesIO(b"mask")
+            full.headers = {"Content-Length": "4"}
+            download.side_effect = [short, full]
+            download_archive(Path(tmp) / "masks.tgz")
+            self.assertEqual(download.call_count, 2)
+            self.assertEqual((Path(tmp) / "masks.tgz").read_bytes(), b"mask")
+
+    def test_download_gives_up_with_a_clear_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, mock.patch("urllib.request.urlopen", side_effect=OSError("down")), \
+                mock.patch("builtins.print"), self.assertRaises(RuntimeError):
+            download_archive(Path(tmp) / "masks.tgz", attempts=2)
 
 
 def modules_with_background(calls: list[bool]) -> dict[str, types.ModuleType]:
