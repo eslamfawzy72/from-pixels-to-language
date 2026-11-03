@@ -8,6 +8,7 @@ with the same functions. Accuracies produced here are meaningless.
 from __future__ import annotations
 
 import contextlib
+import csv
 import importlib.util
 import json
 import sys
@@ -153,6 +154,20 @@ class TestEndToEnd(unittest.TestCase):
                       "--num-workers", "0", "--device", "cpu"])
             test_metrics = json.loads((run_dir / "test_metrics.json").read_text(encoding="utf-8"))
             self.assertEqual(test_metrics["images"], 4)
+            for name in ("macro_precision", "macro_recall", "macro_f1"):
+                self.assertTrue(0.0 <= test_metrics[name] <= 1.0)
+            with (run_dir / "test_confusion_matrix.csv").open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.reader(handle))
+            self.assertEqual(rows[0][1:], [f"species_{i}" for i in range(NUM_CLASSES)])
+            counts = [[int(count) for count in row[1:]] for row in rows[1:]]
+            self.assertEqual(sum(map(sum, counts)), 4)
+            correct = sum(counts[i][i] for i in range(NUM_CLASSES))
+            self.assertAlmostEqual(test_metrics["accuracy"], correct / 4)
+            with (run_dir / "test_per_class_metrics.csv").open(newline="", encoding="utf-8") as handle:
+                per_class = list(csv.DictReader(handle))
+            self.assertEqual(len(per_class), NUM_CLASSES)
+            self.assertEqual(sum(int(row["support"]) for row in per_class), 4)
+            self.assertTrue((run_dir / "test_confusion_matrix.png").is_file())
 
             from PIL import Image
 

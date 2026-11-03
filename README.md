@@ -147,7 +147,7 @@ src/training/
 ├── checkpoint.py    # save_checkpoint / load_checkpoint
 └── tracking.py      # MLflowTracker (params, per-epoch metrics, artifacts)
 src/evaluation/
-├── metrics.py       # accuracy
+├── metrics.py       # accuracy, confusion matrix, per-class and macro precision / recall / F1
 ├── benchmark.py     # parameter counts, latency, peak memory (CUDA)
 └── gradcam.py       # GradCAM, target layers, heatmap overlays and figures, example selection
 src/tuning/
@@ -174,7 +174,7 @@ python -m src.cli train --task classification --config configs/classification.ya
 python -m src.cli train --task classification --model googlenet --epochs 80 --lr 0.05 \
     --set train.model_kwargs.batch_norm=true --set train.model_kwargs.aux_logits=false
 
-# Evaluate the best checkpoint on the held-out test split (writes test_metrics.json next to it)
+# Evaluate the best checkpoint on the held-out test split (see "Evaluation metrics" below)
 python -m src.cli evaluate --task classification --checkpoint outputs/runs/<run_name>/best.pt --split test
 
 # Predict the species of one or more images (top-5)
@@ -184,6 +184,19 @@ python -m src.cli predict --task classification --checkpoint outputs/runs/<run_n
 Useful flags for `train`: `--model`, `--epochs`, `--lr`, `--batch-size`, `--optimizer`, `--scheduler`, `--seed`, `--run-name`, `--output-dir`, `--experiment`, `--tracking-dir`, `--tracking-uri`, `--no-tracking`, `--set`. Run `python -m src.cli train --help` for the full list.
 
 Each run is saved to `outputs/runs/<run_name>/` (`best.pt`, `last.pt`, `history.json`). Checkpoints also store the class names and input size, so `predict` works without downloading the dataset.
+
+### Evaluation metrics
+
+`evaluate` reports accuracy, precision, recall, F1-score and the confusion matrix, and saves them next to the checkpoint:
+
+| File | Contents |
+|---|---|
+| `<split>_metrics.json` | `loss`, `accuracy`, `macro_precision`, `macro_recall`, `macro_f1`, `images`, `epoch` |
+| `<split>_per_class_metrics.csv` | `precision`, `recall`, `f1` and `support` (number of images) of each species |
+| `<split>_confusion_matrix.csv` | Image counts per species pair; rows are the actual species, columns the predicted one |
+| `<split>_confusion_matrix.png` | Heatmap of the matrix; each row is a share of that species' images, on a square-root color scale |
+
+Precision, recall and F1 are macro averages: each species counts equally, whatever its number of images. A value that would divide by zero (for example the precision of a species that is never predicted) counts as 0. Results match scikit-learn's `average="macro", zero_division=0`.
 
 ### Experiment tracking (MLflow)
 
