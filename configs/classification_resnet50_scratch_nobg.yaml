@@ -1,0 +1,43 @@
+# ResNet-50 from scratch, with the background removed and the training improvements below.
+#   python -m src.cli train --task classification --config configs/classification_resnet50_scratch_nobg.yaml
+# The official CUB masks are downloaded the first time (~40 MB). Check them with: python -m src.data.background
+# Masks are used for validation and test images too, so report this score as a separate experiment:
+# it only applies when the bird is already marked, and is not comparable with full-image models.
+# Differences from classification.yaml: the model, 100 epochs, patience 25, the crop and background removal.
+# Run short learning rate tests first with --set train.epochs=15 --set train.learning_rate=<value>.
+
+train:
+  model_name: resnet50
+  num_classes: 200
+  model_kwargs: {}
+  epochs: 100
+  batch_size: 32
+  optimizer: sgd
+  learning_rate: 0.05          # replace with the winner of the short tests: 0.02, 0.05 or 0.1
+  momentum: 0.9
+  weight_decay: 0.0005
+  scheduler: cosine
+  warmup_epochs: 3
+  min_lr: 0.0
+  label_smoothing: 0.1
+  early_stopping_patience: 25
+  monitor: val_accuracy
+  seed: 42
+  device: auto
+
+data:
+  num_workers: 2
+  image_size: 224
+  random_crop: true            # training only; validation and test images are never randomly cropped
+  remove_background: true      # official masks, on training, validation and test images
+
+output:
+  dir: outputs/runs
+  run_name: null
+
+tracking:
+  enabled: true
+  experiment: classification
+  dir: outputs/mlflow
+  tracking_uri: null
+  log_checkpoints: false

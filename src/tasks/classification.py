@@ -21,6 +21,17 @@ from src.training.tracking import MLflowTracker
 PathLike = Union[str, Path]
 
 
+def _dataloaders(remove_background: bool = False, **kwargs: Any) -> tuple:
+    """The train, validation and test loaders, without the background if asked."""
+    if remove_background:
+        from src.data.background import get_background_dataloaders
+
+        return get_background_dataloaders(**kwargs)
+    from src.data.dataset import get_dataloaders
+
+    return get_dataloaders(**kwargs)
+
+
 def train_classification(
     config: TrainConfig,
     run_dir: PathLike,
@@ -28,28 +39,30 @@ def train_classification(
     image_size: int = 224,
     tracker: Optional[MLflowTracker] = None,
     random_crop: bool = False,
+    remove_background: bool = False,
 ) -> dict[str, Any]:
     """Train ``config.model_name`` on CUB and return the result of :func:`fit`.
 
     The class names and input size are stored in every checkpoint so that
     :func:`predict_classification` works without downloading the dataset.
     """
-    from src.data.dataset import get_class_names, get_dataloaders
+    from src.data.dataset import get_class_names
 
     set_seed(config.seed, config.deterministic)
     model = create_model(config.model_name, num_classes=config.num_classes, **config.model_kwargs)
     total_params, trainable_params = count_parameters(model)
-    train_loader, val_loader, _ = get_dataloaders(batch_size=config.batch_size, num_workers=num_workers,
-                                                  image_size=image_size, seed=config.seed, random_crop=random_crop)
+    train_loader, val_loader, _ = _dataloaders(remove_background, batch_size=config.batch_size, num_workers=num_workers,
+                                               image_size=image_size, seed=config.seed, random_crop=random_crop)
     class_names = list(get_class_names())
     if len(class_names) != config.num_classes:
         raise ValueError(f"num_classes={config.num_classes} but the dataset has {len(class_names)} classes")
 
     extra = {"class_names": class_names, "image_size": image_size, "random_crop": random_crop,
+             "remove_background": remove_background,
              "total_params": total_params, "trainable_params": trainable_params}
     if tracker is not None:
         tracker.log_params({**config.to_dict(), "image_size": image_size, "random_crop": random_crop,
-                            "num_workers": num_workers,
+                            "remove_background": remove_background, "num_workers": num_workers,
                             "total_params": total_params, "trainable_params": trainable_params,
                             "train_images": len(train_loader.dataset), "val_images": len(val_loader.dataset)})
         extra["mlflow_run_id"] = tracker.run_id
@@ -153,15 +166,13 @@ def evaluate_classification(
 
     Results are also written next to the checkpoint as ``<split>_metrics.json``.
     """
-    from src.data.dataset import get_dataloaders
-
     if split not in ("val", "test"):
         raise ValueError(f"split must be 'val' or 'test', got {split!r}")
     torch_device = resolve_device(device)
     model, checkpoint = load_model_from_checkpoint(checkpoint_path, torch_device)
-    image_size = checkpoint.get("extra", {}).get("image_size", 224)
-    _, val_loader, test_loader = get_dataloaders(batch_size=batch_size, num_workers=num_workers,
-                                                 image_size=image_size)
+    extra = checkpoint.get("extra", {})
+    _, val_loader, test_loader = _dataloaders(extra.get("remove_background", False), batch_size=batch_size,
+                                              num_workers=num_workers, image_size=extra.get("image_size", 224))
     loader = test_loader if split == "test" else val_loader
     metrics = validate(model, loader, nn.CrossEntropyLoss(), torch_device)
     metrics = {**metrics, "images": len(loader.dataset), "epoch": checkpoint.get("epoch")}
@@ -187,6 +198,9 @@ def predict_classification(
     torch_device = resolve_device(device)
     model, checkpoint = load_model_from_checkpoint(checkpoint_path, torch_device)
     extra = checkpoint.get("extra", {})
+    if extra.get("remove_background", False):
+        print("Warning: this model was trained without backgrounds, but new images have no mask, "
+              "so these predictions use the full image and may be unreliable")
     num_classes = checkpoint["config"]["num_classes"]
     class_names = extra.get("class_names") or [f"class_{i}" for i in range(num_classes)]
     transform = build_eval_transform(extra.get("image_size", 224))
@@ -220,7 +234,6 @@ def gradcam_classification(
     ``target_class`` is the class each heatmap explains: ``"predicted"`` or ``"actual"``
     (with ``"actual"`` the names end in ``_actual``). Returns the saved paths per folder.
     """
-    from src.data.dataset import get_dataloaders
     from src.data.transforms import denormalize
     from src.evaluation.gradcam import GradCAM, save_gradcam_figure, select_examples
 
@@ -233,8 +246,8 @@ def gradcam_classification(
     extra = checkpoint.get("extra", {})
     config = checkpoint["config"]
     class_names = extra.get("class_names") or [f"class_{i}" for i in range(config["num_classes"])]
-    _, val_loader, test_loader = get_dataloaders(batch_size=batch_size, num_workers=num_workers,
-                                                 image_size=extra.get("image_size", 224))
+    _, val_loader, test_loader = _dataloaders(extra.get("remove_background", False), batch_size=batch_size,
+                                              num_workers=num_workers, image_size=extra.get("image_size", 224))
     dataset = (test_loader if split == "test" else val_loader).dataset
 
     correct, incorrect = select_examples(model, dataset, num_examples, torch_device, batch_size, num_workers, seed)

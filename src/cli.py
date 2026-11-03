@@ -107,7 +107,8 @@ def cmd_train(args: argparse.Namespace) -> None:
     def run(tracker: Optional[MLflowTracker]) -> None:
         train_classification(config, run_dir, num_workers=data.get("num_workers", 2),
                              image_size=data.get("image_size", 224), tracker=tracker,
-                             random_crop=data.get("random_crop", False))
+                             random_crop=data.get("random_crop", False),
+                             remove_background=data.get("remove_background", False))
 
     if tracking.get("enabled", True):
         with MLflowTracker(tracking.get("experiment", "classification"), run_name=run_name,
@@ -158,6 +159,8 @@ def cmd_tune(args: argparse.Namespace) -> None:
     else:
         tracking = None
     data = settings["data"]
+    if data.get("remove_background", False):
+        raise ValueError("data.remove_background is not supported by tune; run separate train commands instead")
 
     print(f"{args.method} search: {len(trials)} trials of {base['epochs']} epochs -> {study_dir}")
     summary = tune_classification(base, trials, study_dir, args.method, space=space,

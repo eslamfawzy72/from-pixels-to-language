@@ -289,6 +289,17 @@ python -m src.cli evaluate --task classification --checkpoint outputs/runs/<run_
 
 It uses the same data, preprocessing and seed as the from-scratch runs; the images are already normalized with the ImageNet mean and std that the weights expect. The weights (~45 MB for ResNet-18, ~100 MB for ResNet-50) are downloaded once to `~/.cache/torch` the first time the model is built.
 
+### Background removal experiment
+
+`configs/classification_resnet50_scratch_nobg.yaml` trains ResNet-50 from scratch on images cropped to the bird, with everything else filled with the padding color. The official CUB masks (~40 MB) are downloaded to `~/.cache/cub_segmentations` the first time. Code: [src/data/background.py](src/data/background.py). Other runs are not affected.
+
+```bash
+python -m src.data.background   # check every image against its mask and save examples to outputs/eda/
+python -m src.cli train --task classification --config configs/classification_resnet50_scratch_nobg.yaml --run-name resnet50_scratch_nobg
+```
+
+`evaluate` and `gradcam` remove the background automatically for these checkpoints. The masks are human-made and are used for test images too, so report this score as a separate experiment: it only applies when the bird is already marked and is not comparable with full-image models. `predict` has no mask for a new image, so it warns and uses the full image.
+
 ### Grad-CAM (what the model looks at)
 
 Grad-CAM shows which image regions support a class score. It works with every from-scratch and pretrained model, and needs only a checkpoint from `train`:
