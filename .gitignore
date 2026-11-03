@@ -39,6 +39,7 @@ mlflow.db
 outputs/runs/
 outputs/mlflow/
 outputs/eda/
+outputs/GradCAM/
 wandb/
 lightning_logs/
 tensorboard/
