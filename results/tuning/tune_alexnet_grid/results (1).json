@@ -1,0 +1,218 @@
+{
+  "method": "grid",
+  "study": "tune_alexnet_grid",
+  "monitor": "val_accuracy",
+  "num_trials": 6,
+  "base_config": {
+    "model_name": "alexnet",
+    "num_classes": 200,
+    "model_kwargs": {},
+    "epochs": 30,
+    "batch_size": 32,
+    "optimizer": "sgd",
+    "learning_rate": 0.05,
+    "momentum": 0.9,
+    "weight_decay": 0.0005,
+    "scheduler": "cosine",
+    "warmup_epochs": 3,
+    "min_lr": 0.0,
+    "label_smoothing": 0.1,
+    "early_stopping_patience": null,
+    "monitor": "val_accuracy",
+    "seed": 42,
+    "device": "auto"
+  },
+  "space": {
+    "values": {
+      "learning_rate": [
+        0.003,
+        0.01,
+        0.03
+      ],
+      "weight_decay": [
+        0.0005,
+        0.002
+      ],
+      "label_smoothing": [
+        0.0,
+        0.1,
+        0.2
+      ]
+    },
+    "crossed": [
+      "learning_rate",
+      "weight_decay"
+    ]
+  },
+  "trials": [
+    {
+      "trial": "trial_00",
+      "params": {
+        "learning_rate": 0.003,
+        "weight_decay": 0.0005,
+        "label_smoothing": 0.0
+      },
+      "hyperparameters": {
+        "learning_rate": 0.003,
+        "weight_decay": 0.0005,
+        "label_smoothing": 0.0
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.16907675194660735,
+      "best_epoch": 30,
+      "epochs_run": 30,
+      "val_accuracy": 0.16907675194660735,
+      "val_loss": 3.741112703476122,
+      "train_accuracy": 0.293851895501866,
+      "final_val_accuracy": 0.16907675194660735,
+      "stopped_early": false,
+      "seconds": 1049.126968421,
+      "run_dir": "/kaggle/working/runs/tune_alexnet_grid/trial_00"
+    },
+    {
+      "trial": "trial_01",
+      "params": {
+        "learning_rate": 0.003,
+        "weight_decay": 0.002,
+        "label_smoothing": 0.1
+      },
+      "hyperparameters": {
+        "learning_rate": 0.003,
+        "weight_decay": 0.002,
+        "label_smoothing": 0.1
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.14794215795328142,
+      "best_epoch": 28,
+      "epochs_run": 30,
+      "val_accuracy": 0.14794215795328142,
+      "val_loss": 3.8323336880782555,
+      "train_accuracy": 0.23551365154193676,
+      "final_val_accuracy": 0.1457174638487208,
+      "stopped_early": false,
+      "seconds": 1003.8917432729997,
+      "run_dir": "/kaggle/working/runs/tune_alexnet_grid/trial_01"
+    },
+    {
+      "trial": "trial_02",
+      "params": {
+        "learning_rate": 0.01,
+        "weight_decay": 0.0005,
+        "label_smoothing": 0.1
+      },
+      "hyperparameters": {
+        "learning_rate": 0.01,
+        "weight_decay": 0.0005,
+        "label_smoothing": 0.1
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.22803114571746386,
+      "best_epoch": 28,
+      "epochs_run": 30,
+      "val_accuracy": 0.22803114571746386,
+      "val_loss": 3.3717181844361233,
+      "train_accuracy": 0.4623846002749951,
+      "final_val_accuracy": 0.22024471635150167,
+      "stopped_early": false,
+      "seconds": 1019.1512323759998,
+      "run_dir": "/kaggle/working/runs/tune_alexnet_grid/trial_02"
+    },
+    {
+      "trial": "trial_03",
+      "params": {
+        "learning_rate": 0.01,
+        "weight_decay": 0.002,
+        "label_smoothing": 0.2
+      },
+      "hyperparameters": {
+        "learning_rate": 0.01,
+        "weight_decay": 0.002,
+        "label_smoothing": 0.2
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.20244716351501668,
+      "best_epoch": 28,
+      "epochs_run": 30,
+      "val_accuracy": 0.20244716351501668,
+      "val_loss": 3.50057785582622,
+      "train_accuracy": 0.3653506187389511,
+      "final_val_accuracy": 0.20244716351501668,
+      "stopped_early": false,
+      "seconds": 1018.6878398849999,
+      "run_dir": "/kaggle/working/runs/tune_alexnet_grid/trial_03"
+    },
+    {
+      "trial": "trial_04",
+      "params": {
+        "learning_rate": 0.03,
+        "weight_decay": 0.0005,
+        "label_smoothing": 0.2
+      },
+      "hyperparameters": {
+        "learning_rate": 0.03,
+        "weight_decay": 0.0005,
+        "label_smoothing": 0.2
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.20578420467185762,
+      "best_epoch": 27,
+      "epochs_run": 30,
+      "val_accuracy": 0.20578420467185762,
+      "val_loss": 3.5368488837402308,
+      "train_accuracy": 0.34236888626988804,
+      "final_val_accuracy": 0.20578420467185762,
+      "stopped_early": false,
+      "seconds": 1028.5969454639999,
+      "run_dir": "/kaggle/working/runs/tune_alexnet_grid/trial_04"
+    },
+    {
+      "trial": "trial_05",
+      "params": {
+        "learning_rate": 0.03,
+        "weight_decay": 0.002,
+        "label_smoothing": 0.0
+      },
+      "hyperparameters": {
+        "learning_rate": 0.03,
+        "weight_decay": 0.002,
+        "label_smoothing": 0.0
+      },
+      "monitor": "val_accuracy",
+      "best_metric": 0.18131256952169078,
+      "best_epoch": 30,
+      "epochs_run": 30,
+      "val_accuracy": 0.18131256952169078,
+      "val_loss": 3.6314567755804177,
+      "train_accuracy": 0.26301316047927714,
+      "final_val_accuracy": 0.18131256952169078,
+      "stopped_early": false,
+      "seconds": 994.4243674609997,
+      "run_dir": "/kaggle/working/runs/tune_alexnet_grid/trial_05"
+    }
+  ],
+  "best": {
+    "trial": "trial_02",
+    "params": {
+      "learning_rate": 0.01,
+      "weight_decay": 0.0005,
+      "label_smoothing": 0.1
+    },
+    "hyperparameters": {
+      "learning_rate": 0.01,
+      "weight_decay": 0.0005,
+      "label_smoothing": 0.1
+    },
+    "monitor": "val_accuracy",
+    "best_metric": 0.22803114571746386,
+    "best_epoch": 28,
+    "epochs_run": 30,
+    "val_accuracy": 0.22803114571746386,
+    "val_loss": 3.3717181844361233,
+    "train_accuracy": 0.4623846002749951,
+    "final_val_accuracy": 0.22024471635150167,
+    "stopped_early": false,
+    "seconds": 1019.1512323759998,
+    "run_dir": "/kaggle/working/runs/tune_alexnet_grid/trial_02"
+  },
+  "total_seconds": 6113.8790968799985
+}
