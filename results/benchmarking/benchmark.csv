@@ -1,0 +1,9 @@
+model,source,group,pretrained,image_size,train_images,top1_accuracy
+"ResNet-18, from scratch",This project,ours,no,224,5091,45.84
+ResNet-50 (earlier run),This project,ours,ImageNet,224,5091,74.53
+"ResNet-50, article settings (final)",This project,ours,ImageNet,375,5091,80.88
+ResNet-50,Lipnitskaya 2021,published,ImageNet,375 crop,not confirmed,80.77
+Bilinear CNN (VGG-M + VGG-D),Lin et al. 2015,published,ImageNet,448,official split (count not stated),84.1
+ResNet-50 baseline,Li et al. 2017 via Yang et al. 2018,published,not confirmed,not confirmed,not confirmed,84.5
+NTS-Net (K = 4),Yang et al. 2018,published,ImageNet,448,5994,87.5
+TransFG (ViT-B/16),He et al. 2021,published,ImageNet-21k,448,not confirmed,91.7
