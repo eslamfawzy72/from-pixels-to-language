@@ -7,6 +7,7 @@ tracking. ``src.cli`` only parses arguments and calls these functions.
 
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 from typing import Any, Optional, Sequence, Union
@@ -14,6 +15,7 @@ from typing import Any, Optional, Sequence, Union
 import torch
 from torch import nn
 
+from src.evaluation.metrics import macro_metrics, per_class_metrics
 from src.models import count_parameters, create_model
 from src.training import TrainConfig, fit, resolve_device, set_seed, validate
 from src.training.tracking import MLflowTracker
@@ -142,6 +144,19 @@ def load_model_from_checkpoint(checkpoint_path: PathLike, device: torch.device) 
     return model.to(device).eval(), checkpoint
 
 
+def save_metric_tables(directory: Path, split: str, confusion: torch.Tensor, class_names: Sequence[str]) -> None:
+    """Write ``<split>_per_class_metrics.csv`` and ``<split>_confusion_matrix.csv`` (rows actual, columns predicted)."""
+    per_class = per_class_metrics(confusion)
+    with (directory / f"{split}_per_class_metrics.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["species", *per_class])
+        writer.writerows(zip(class_names, *(values.tolist() for values in per_class.values())))
+    with (directory / f"{split}_confusion_matrix.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["actual/predicted", *class_names])
+        writer.writerows([name, *counts] for name, counts in zip(class_names, confusion.tolist()))
+
+
 def evaluate_classification(
     checkpoint_path: PathLike,
     split: str = "test",
@@ -149,27 +164,38 @@ def evaluate_classification(
     num_workers: int = 2,
     device: str = "auto",
 ) -> dict[str, float]:
-    """Compute loss and accuracy of a checkpoint on the ``"val"`` or ``"test"`` split.
+    """Compute loss, accuracy, macro precision/recall/F1 and the confusion matrix of a checkpoint.
 
-    Results are also written next to the checkpoint as ``<split>_metrics.json``.
+    ``split`` is ``"val"`` or ``"test"``. Written next to the checkpoint:
+    ``<split>_metrics.json``, ``<split>_per_class_metrics.csv``,
+    ``<split>_confusion_matrix.csv`` and ``<split>_confusion_matrix.png``.
     """
     from src.data.dataset import get_dataloaders
+    from src.visualization.confusion_matrix import plot_confusion_matrix
 
     if split not in ("val", "test"):
         raise ValueError(f"split must be 'val' or 'test', got {split!r}")
     torch_device = resolve_device(device)
     model, checkpoint = load_model_from_checkpoint(checkpoint_path, torch_device)
-    image_size = checkpoint.get("extra", {}).get("image_size", 224)
+    extra = checkpoint.get("extra", {})
+    config = checkpoint["config"]
+    num_classes = config["num_classes"]
+    class_names = extra.get("class_names") or [f"class_{i}" for i in range(num_classes)]
     _, val_loader, test_loader = get_dataloaders(batch_size=batch_size, num_workers=num_workers,
-                                                 image_size=image_size)
+                                                 image_size=extra.get("image_size", 224))
     loader = test_loader if split == "test" else val_loader
-    metrics = validate(model, loader, nn.CrossEntropyLoss(), torch_device)
-    metrics = {**metrics, "images": len(loader.dataset), "epoch": checkpoint.get("epoch")}
+    confusion = torch.zeros(num_classes, num_classes, dtype=torch.long)
+    metrics = validate(model, loader, nn.CrossEntropyLoss(), torch_device, confusion=confusion)
+    metrics = {**metrics, **macro_metrics(confusion), "images": len(loader.dataset), "epoch": checkpoint.get("epoch")}
 
     output = Path(checkpoint_path).with_name(f"{split}_metrics.json")
     output.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    save_metric_tables(output.parent, split, confusion, class_names)
+    plot_confusion_matrix(confusion, class_names, f"{config['model_name']}: confusion matrix on the {split} split",
+                          output.with_name(f"{split}_confusion_matrix.png"))
     print(f"{split}: loss={metrics['loss']:.4f} accuracy={metrics['accuracy']:.4f} "
-          f"on {metrics['images']} images -> {output}")
+          f"macro_precision={metrics['macro_precision']:.4f} macro_recall={metrics['macro_recall']:.4f} "
+          f"macro_f1={metrics['macro_f1']:.4f} on {metrics['images']} images -> {output.parent}")
     return metrics
 
 
