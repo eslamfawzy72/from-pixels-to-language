@@ -55,6 +55,7 @@ def fake_data_modules() -> dict[str, types.ModuleType]:
         return transform
 
     transforms.build_eval_transform = build_eval_transform
+    transforms.denormalize = lambda x: x.permute(1, 2, 0).clamp(0, 1).numpy()
     return {"src.data.dataset": dataset, "src.data.transforms": transforms}
 
 
@@ -164,6 +165,13 @@ class TestEndToEnd(unittest.TestCase):
             self.assertTrue(0 < sum(p for _, p in top) <= 1 + 1e-6)
             self.assertGreaterEqual(top[0][1], top[1][1])
             self.assertTrue(all(name.startswith("species_") for name, _ in top))
+
+            gradcam_dir = tmp_path / "GradCAM"
+            cli.main(["gradcam", "--task", "classification", "--checkpoint", str(checkpoint), "--num-examples", "1",
+                      "--output-dir", str(gradcam_dir), "--num-workers", "0", "--device", "cpu"])
+            figures = list(gradcam_dir.glob("*/resnet18_test_*.png"))
+            self.assertGreaterEqual(len(figures), 1)  # the fake data may have no correct or no incorrect example
+            self.assertTrue({figure.parent.name for figure in figures} <= {"correct", "incorrect"})
 
             if tracking_enabled:
                 import mlflow

@@ -9,6 +9,7 @@ Examples:
     python -m src.cli compare-tuning outputs/runs/tune_resnet18_grid outputs/runs/tune_resnet18_random
     python -m src.cli evaluate --task classification --checkpoint outputs/runs/<run>/best.pt --split test
     python -m src.cli predict --task classification --checkpoint outputs/runs/<run>/best.pt --image bird.jpg
+    python -m src.cli gradcam --task classification --checkpoint outputs/runs/<run>/best.pt
 
 Settings come from a YAML file (see ``configs/classification.yaml``).
 Shortcut flags (``--model``, ``--epochs``, ``--lr``, ...) and generic
@@ -195,6 +196,14 @@ def cmd_predict(args: argparse.Namespace) -> None:
             print(f"  {rank}. {name:<35} {probability:6.2%}")
 
 
+def cmd_gradcam(args: argparse.Namespace) -> None:
+    from src.tasks.classification import gradcam_classification
+
+    gradcam_classification(args.checkpoint, split=args.split, num_examples=args.num_examples,
+                           output_dir=args.output_dir, target_class=args.target_class, batch_size=args.batch_size,
+                           num_workers=args.num_workers, seed=args.seed, device=args.device)
+
+
 def add_settings_arguments(parser: argparse.ArgumentParser) -> None:
     """Flags shared by ``train`` and ``tune`` (see :func:`resolve_train_settings`)."""
     parser.add_argument("--task", choices=TASKS, required=True)
@@ -258,6 +267,20 @@ def build_parser() -> argparse.ArgumentParser:
     predict.add_argument("--top-k", type=int, default=5)
     predict.add_argument("--device", default="auto")
     predict.set_defaults(func=cmd_predict)
+
+    gradcam = commands.add_parser("gradcam", help="save Grad-CAM figures of correctly and incorrectly classified images")
+    gradcam.add_argument("--task", choices=TASKS, required=True)
+    gradcam.add_argument("--checkpoint", type=Path, required=True)
+    gradcam.add_argument("--split", choices=("val", "test"), default="test")
+    gradcam.add_argument("--num-examples", type=int, default=5, help="images per folder (correct, incorrect)")
+    gradcam.add_argument("--target-class", choices=("predicted", "actual"), default="predicted",
+                         help="the class each heatmap explains")
+    gradcam.add_argument("--output-dir", type=Path, default=Path("outputs/GradCAM"))
+    gradcam.add_argument("--batch-size", type=int, default=64)
+    gradcam.add_argument("--num-workers", type=int, default=2)
+    gradcam.add_argument("--seed", type=int, default=42, help="seed of the random image order")
+    gradcam.add_argument("--device", default="auto")
+    gradcam.set_defaults(func=cmd_gradcam)
     return parser
 
 

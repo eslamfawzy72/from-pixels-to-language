@@ -1,4 +1,4 @@
-"""Classification task: train, tune, evaluate and predict.
+"""Classification task: train, tune, evaluate, predict and explain (Grad-CAM).
 
 This module wires together the data pipeline (``src.data``), the models
 (``src.models``), the training loop (``src.training``) and optional MLflow
@@ -200,3 +200,59 @@ def predict_classification(
             values, indices = probabilities.topk(min(top_k, num_classes))
             predictions.append([(class_names[i], float(p)) for p, i in zip(values.tolist(), indices.tolist())])
     return predictions
+
+
+def gradcam_classification(
+    checkpoint_path: PathLike,
+    split: str = "test",
+    num_examples: int = 5,
+    output_dir: PathLike = "outputs/GradCAM",
+    target_class: str = "predicted",
+    batch_size: int = 64,
+    num_workers: int = 2,
+    seed: int = 42,
+    device: str = "auto",
+) -> dict[str, list[Path]]:
+    """Save Grad-CAM figures of correctly and incorrectly classified images of a split.
+
+    Figures go to ``<output_dir>/correct/`` and ``<output_dir>/incorrect/`` as
+    ``<model>_<split>_<image index>.png``, so several models can share the folders.
+    ``target_class`` is the class each heatmap explains: ``"predicted"`` or ``"actual"``
+    (with ``"actual"`` the names end in ``_actual``). Returns the saved paths per folder.
+    """
+    from src.data.dataset import get_dataloaders
+    from src.data.transforms import denormalize
+    from src.evaluation.gradcam import GradCAM, save_gradcam_figure, select_examples
+
+    if split not in ("val", "test"):
+        raise ValueError(f"split must be 'val' or 'test', got {split!r}")
+    if target_class not in ("predicted", "actual"):
+        raise ValueError(f"target_class must be 'predicted' or 'actual', got {target_class!r}")
+    torch_device = resolve_device(device)
+    model, checkpoint = load_model_from_checkpoint(checkpoint_path, torch_device)
+    extra = checkpoint.get("extra", {})
+    config = checkpoint["config"]
+    class_names = extra.get("class_names") or [f"class_{i}" for i in range(config["num_classes"])]
+    _, val_loader, test_loader = get_dataloaders(batch_size=batch_size, num_workers=num_workers,
+                                                 image_size=extra.get("image_size", 224))
+    dataset = (test_loader if split == "test" else val_loader).dataset
+
+    correct, incorrect = select_examples(model, dataset, num_examples, torch_device, batch_size, num_workers, seed)
+    cam = GradCAM(model)
+    suffix = "_actual" if target_class == "actual" else ""
+    saved: dict[str, list[Path]] = {}
+    for folder, examples in (("correct", correct), ("incorrect", incorrect)):
+        if len(examples) < num_examples:
+            print(f"Warning: only {len(examples)} of {num_examples} {folder} examples in the {split} split")
+        saved[folder] = []
+        for example in examples:
+            image = dataset[example.index][0]
+            target = example.predicted if target_class == "predicted" else example.actual
+            heatmap = cam(image.unsqueeze(0).to(torch_device), [target]).heatmaps[0].numpy()
+            path = Path(output_dir) / folder / f"{config['model_name']}_{split}_{example.index:05d}{suffix}.png"
+            save_gradcam_figure(path, denormalize(image), heatmap, class_names[example.actual],
+                                class_names[example.predicted], example.confidence, explained=class_names[target])
+            saved[folder].append(path)
+            print(f"{class_names[example.actual]} -> {class_names[example.predicted]} "
+                  f"({example.confidence:.1%}): {path}")
+    return saved

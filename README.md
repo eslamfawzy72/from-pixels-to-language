@@ -148,12 +148,13 @@ src/training/
 └── tracking.py      # MLflowTracker (params, per-epoch metrics, artifacts)
 src/evaluation/
 ├── metrics.py       # accuracy
-└── benchmark.py     # parameter counts, latency, peak memory (CUDA)
+├── benchmark.py     # parameter counts, latency, peak memory (CUDA)
+└── gradcam.py       # GradCAM, target layers, heatmap overlays and figures, example selection
 src/tuning/
 ├── search_space.py  # grid (Cartesian product) and random (log-uniform, uniform, int, choice) trials
 └── study.py         # run_study (resumable), results.json/csv, comparison table
 src/tasks/
-└── classification.py  # train / tune / evaluate / predict: wires data + model + training + tracking
+└── classification.py  # train / tune / evaluate / predict / gradcam: wires data + model + training + tracking
 src/cli.py           # command line interface
 configs/classification.yaml  # default classification settings
 configs/tuning.yaml          # search spaces and trial settings for `tune`
@@ -287,6 +288,43 @@ python -m src.cli evaluate --task classification --checkpoint outputs/runs/<run_
 ```
 
 It uses the same data, preprocessing and seed as the from-scratch runs; the images are already normalized with the ImageNet mean and std that the weights expect. The weights (~45 MB for ResNet-18, ~100 MB for ResNet-50) are downloaded once to `~/.cache/torch` the first time the model is built.
+
+### Grad-CAM (what the model looks at)
+
+Grad-CAM shows which image regions support a class score. It works with every from-scratch and pretrained model, and needs only a checkpoint from `train`:
+
+```bash
+# 5 correctly and 5 incorrectly classified test images
+python -m src.cli gradcam --task classification --checkpoint outputs/runs/<run_name>/best.pt
+
+# More images, the validation split, or heatmaps of the true species instead of the predicted one
+python -m src.cli gradcam --task classification --checkpoint outputs/runs/<run_name>/best.pt \
+    --num-examples 10 --split val --target-class actual
+```
+
+Figures are saved to `outputs/GradCAM/correct/` and `outputs/GradCAM/incorrect/` as `<model>_<split>_<image index>.png`, so several models can share the folders. Each figure shows the original image, the heatmap and the overlay, with the actual label, predicted label and prediction confidence. The original image is the model's input: letterboxed, so the gray bars are padding.
+
+The images are picked in a seeded random order (`--seed`), because the splits are sorted by species. Each folder prefers different species. If there are not enough examples, a warning says how many were found.
+
+| Model | Target layer | Feature map at 224 input |
+|---|---|---|
+| `alexnet`, `alexnet_pretrained` | `features[-2]`: last conv + ReLU, before the last max pool | 13×13 |
+| `vgg16`, `vgg19`, `vgg16_pretrained` | `features[-2]`: last conv + ReLU, before the last max pool | 14×14 |
+| `googlenet` | `inception5b` | 7×7 |
+| `resnet18` … `resnet152`, `resnet18_pretrained`, `resnet50_pretrained` | `layer4[-1]`: last residual block | 7×7 |
+
+From Python, with any batch of preprocessed images and either the predicted classes or classes of your choice:
+
+```python
+from src.evaluation.gradcam import GradCAM, overlay_heatmap
+
+cam = GradCAM(model)                         # or GradCAM(model, target_layer=model.layer3[-1])
+result = cam(images)                         # explains each image's predicted class
+result = cam(images, target_classes=labels)  # explains the given classes
+result.heatmaps                              # [N, H, W] in 0-1; also target_classes, predictions, confidences
+```
+
+Each heatmap is scaled to its own peak, so colors show where the evidence is within one image; they cannot be compared between images. A heatmap can be all zero if no region has positive evidence for the class.
 
 ### Creating a model
 
