@@ -147,6 +147,7 @@ def cmd_tune(args: argparse.Namespace) -> None:
     from src.tasks.classification import tune_classification
 
     tuning = load_settings(args.space)
+    args.config = args.config or Path(tuning.get("config", DEFAULT_CONFIG))  # the space file can name its base config
     settings = resolve_train_settings(args, preset=tuning.get("trial"))
     trials, space = build_trials(args.method, tuning, args.num_trials, args.search_seed)
     base = settings["train"]
@@ -165,7 +166,8 @@ def cmd_tune(args: argparse.Namespace) -> None:
                                   tracking=tracking, random_crop=data.get("random_crop", False))
     overrides = " ".join(f"--set train.{key}={yaml_scalar(value)}" for key, value in summary["best"]["params"].items())
     print(f"Full training run with the best setting:\n  python -m src.cli train --task {args.task} "
-          f"--model {base['model_name']} --run-name {base['model_name']}_tuned {overrides}")
+          f"--config {args.config.as_posix()} --model {base['model_name']} --run-name {base['model_name']}_tuned "
+          f"{overrides}")
 
 
 def cmd_compare_tuning(args: argparse.Namespace) -> None:
@@ -243,7 +245,7 @@ def build_parser() -> argparse.ArgumentParser:
     tune.add_argument("--search-seed", type=int, help="random search: sampling seed (overrides the YAML)")
     tune.add_argument("--study-name", help="study folder / MLflow parent run name (default: tune_<model>_<method>); "
                       "re-running the same study skips finished trials")
-    tune.set_defaults(func=cmd_tune)
+    tune.set_defaults(func=cmd_tune, config=None)  # None: the space file's `config`, else DEFAULT_CONFIG
 
     compare = commands.add_parser("compare-tuning", help="compare finished tuning studies in a table")
     compare.add_argument("studies", type=Path, nargs="+",

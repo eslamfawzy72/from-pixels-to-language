@@ -159,6 +159,7 @@ src/cli.py           # command line interface
 configs/classification.yaml  # default classification settings
 configs/tuning.yaml          # search spaces and trial settings for `tune`
 configs/tuning_alexnet.yaml  # the same for AlexNet (pass with --space)
+configs/tuning_resnet50_article.yaml  # the same for the pretrained ResNet-50 article run
 ```
 
 ### Command line interface
@@ -259,6 +260,24 @@ python -m src.cli tune --task classification --method grid --space configs/tunin
     --output-dir /content/drive/MyDrive/from-pixels-to-language/runs \
     --tracking-dir /content/drive/MyDrive/from-pixels-to-language/mlflow
 # same with --method random, then compare-tuning on tune_alexnet_grid and tune_alexnet_random
+```
+
+#### ResNet-50 (pretrained, article approach)
+
+[configs/tuning_resnet50_article.yaml](configs/tuning_resnet50_article.yaml) searches around the `resnet50_article` run (80.2% validation, 80.9% test before tuning). It names `configs/classification_article.yaml` as its base config, so Adam, 375 px images, the random crop and batch size 24 apply without `--config`.
+
+| | Grid search | Random search |
+|---|---|---|
+| Values | `learning_rate` {5e-5, 1e-4, 2e-4}, `weight_decay` {0, 1e-4}, `label_smoothing` {0, 0.1, 0.2} | `learning_rate` log-uniform [3e-5, 3e-4], `weight_decay` ∈ {0, 1e-5, 1e-4, 1e-3}, `label_smoothing` ∈ {0, 0.1, 0.2} |
+| Trials | 6 (fractional grid; includes the untuned setting) | 6 (sampled with `random.seed: 0`) |
+
+Each trial runs 15 epochs: the untuned run had already reached 78.1% validation accuracy by then. At its roughly 195 s per epoch on a T4, a study takes about 4.9 hours (6 × 15 × 195 s); it can be resumed if Colab disconnects.
+
+```bash
+python -m src.cli tune --task classification --method grid --space configs/tuning_resnet50_article.yaml \
+    --output-dir /content/drive/MyDrive/from-pixels-to-language/runs \
+    --tracking-dir /content/drive/MyDrive/from-pixels-to-language/mlflow
+# same with --method random, then compare-tuning on tune_resnet50_article_grid and tune_resnet50_article_random
 ```
 
 ### Transfer learning (pretrained ResNet-18 and ResNet-50)

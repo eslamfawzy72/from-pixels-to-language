@@ -1,0 +1,33 @@
+# Search settings for the pretrained ResNet-50 article approach (80.2% val, 80.9% test before tuning):
+#   python -m src.cli tune --task classification --method grid|random --space configs/tuning_resnet50_article.yaml
+# Same rules as configs/tuning.yaml: `trial` is applied on top of the base config, then the tuned values;
+# trials are ranked on the validation split and the test split is never used.
+
+config: configs/classification_article.yaml   # base settings: Adam, 375 px images, random crop, batch size 24
+
+trial:                         # same seed, same data, only the tuned values differ
+  # Validation accuracy was already 78.1% at epoch 15 of the untuned run (best 80.2% at epoch 30),
+  # and training accuracy was 92.6% by epoch 8, so 15 epochs show the effect of regularization.
+  epochs: 15
+  early_stopping_patience: null
+  monitor: val_accuracy        # trials are ranked by validation accuracy only
+
+grid:
+  learning_rate: [0.00005, 0.0001, 0.0002]    # around the untuned 1e-4; pretrained weights need small steps
+  weight_decay: [0.0, 0.0001]                 # the untuned run has none and reaches 100% train accuracy
+  label_smoothing: [0.1, 0.0, 0.2]            # this order puts the untuned setting in the rotation below
+# Fractional grid: 3 x 2 = 6 trials, not 3 x 2 x 3 = 18; label_smoothing is rotated so each value is used twice:
+#   lr 5e-5: wd 0 -> ls 0.1, wd 1e-4 -> ls 0.0
+#   lr 1e-4: wd 0 -> ls 0.0, wd 1e-4 -> ls 0.2     (the first is the untuned setting, at 15 epochs)
+#   lr 2e-4: wd 0 -> ls 0.2, wd 1e-4 -> ls 0.1
+grid_crossed: [learning_rate, weight_decay]
+
+random:
+  num_trials: 6                # same budget as the grid
+  seed: 0                      # sampling seed (the training seed is train.seed)
+  space:
+    learning_rate: {type: loguniform, low: 0.00003, high: 0.0003}    # covers the whole grid range
+    weight_decay: {type: choice, values: [0.0, 0.00001, 0.0001, 0.001]}    # a choice, because loguniform cannot include 0
+    label_smoothing: {type: choice, values: [0.0, 0.1, 0.2]}
+
+experiment: tuning             # MLflow experiment; each study is a parent run with one child run per trial

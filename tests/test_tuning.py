@@ -254,6 +254,56 @@ class TestTuneCli(unittest.TestCase):
         self.assertIn("--model alexnet --run-name alexnet_tuned", output.getvalue())
         self.assertEqual(calls[1][2].name, "tune_resnet18_random")  # --model still wins over the space file
 
+    def test_repo_resnet50_article_tuning_config(self) -> None:
+        tuning = cli.load_settings(REPO_TUNING.with_name("tuning_resnet50_article.yaml"))
+        grid, _ = cli.build_trials("grid", tuning)
+        random_a, _ = cli.build_trials("random", tuning)
+        self.assertEqual(len(grid), 6)
+        self.assertEqual(len({tuple(t.values()) for t in grid}), 6)
+        self.assertEqual(len(random_a), 6)
+        tuned = {"learning_rate", "weight_decay", "label_smoothing"}
+        self.assertTrue(all(set(t) == tuned for t in grid + random_a))
+        # the untuned setting is one of the grid trials, and every label_smoothing value is used twice
+        self.assertIn({"learning_rate": 0.0001, "weight_decay": 0.0, "label_smoothing": 0.0}, grid)
+        self.assertEqual(sorted(t["label_smoothing"] for t in grid), [0.0, 0.0, 0.1, 0.1, 0.2, 0.2])
+        low, high = (tuning["random"]["space"]["learning_rate"][key] for key in ("low", "high"))
+        self.assertTrue(all(low <= t["learning_rate"] <= high for t in grid + random_a))
+        base = cli.load_settings(REPO_TUNING.parent.parent / tuning["config"])["train"]
+        for params in grid + random_a:
+            config = TrainConfig.from_dict({**base, **tuning["trial"], **params})
+            self.assertEqual((config.model_name, config.optimizer, config.epochs), ("resnet50_article", "adam", 15))
+            self.assertEqual(config.monitor, "val_accuracy")
+
+    def test_tune_uses_base_config_from_space_file(self) -> None:
+        # The task module is replaced, so this checks the settings passed to it without training.
+        calls = []
+
+        def fake_tune(base, trials, study_dir, method, **kwargs):
+            calls.append((base, Path(study_dir), kwargs))
+            return {"best": {"params": trials[0]}}
+
+        fake_task = types.ModuleType("src.tasks.classification")
+        fake_task.tune_classification = fake_tune
+        repo = REPO_TUNING.parent.parent
+        tuning = yaml.safe_load(REPO_TUNING.with_name("tuning_resnet50_article.yaml").read_text(encoding="utf-8"))
+        tuning["config"] = (repo / tuning["config"]).as_posix()  # the repo's file names it relative to the repo root
+        space = make_temp_dir(self) / "space.yaml"
+        space.write_text(yaml.safe_dump(tuning), encoding="utf-8")
+        output = StringIO()
+        with swapped_modules({"src.tasks.classification": fake_task}), redirect_stdout(output):
+            cli.main(["tune", "--task", "classification", "--method", "grid", "--space", str(space)])
+            cli.main(["tune", "--task", "classification", "--method", "grid", "--space", str(space),
+                      "--config", str(REPO_TUNING.with_name("classification.yaml"))])
+        base, study_dir, kwargs = calls[0]
+        self.assertEqual((base["model_name"], base["optimizer"], base["batch_size"], base["epochs"]),
+                         ("resnet50_article", "adam", 24, 15))
+        self.assertEqual((kwargs["image_size"], kwargs["random_crop"]), (375, True))
+        self.assertEqual(study_dir.name, "tune_resnet50_article_grid")
+        # the printed full-run command must keep the base config, or it would train with other settings
+        self.assertIn(f"--config {tuning['config']} --model resnet50_article --run-name resnet50_article_tuned",
+                      output.getvalue())
+        self.assertEqual(calls[1][0]["optimizer"], "sgd")  # --config still wins over the space file
+
     def test_printed_override_parses_back(self) -> None:
         for value in (0.05, 1e-05, 0.000123, 3, 0.0):
             settings = {"train": {}}
